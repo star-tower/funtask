@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "funtask"
-description = ''
+description = 'A Python framework for stateful functional task dispatching and execution'
 readme = "README.md"
 requires-python = ">=3.7"
 license = "MIT"
@@ -38,7 +38,8 @@ path = "funtask/__about__.py"
 dependencies = [
   "pytest",
   "pytest-cov",
-  "mypy_extensions"
+  "mypy_extensions",
+  "dill"
 ]
 [tool.hatch.envs.default.scripts]
 cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=funtask --cov=tests"
