@@ -23,7 +23,10 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = []
+dependencies = [
+  "mypy_extensions",
+  "dill"
+]
 dynamic = ["version"]
 
 [project.urls]
@@ -38,8 +41,6 @@ path = "funtask/__about__.py"
 dependencies = [
   "pytest",
   "pytest-cov",
-  "mypy_extensions",
-  "dill"
 ]
 [tool.hatch.envs.default.scripts]
 cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=funtask --cov=tests"
