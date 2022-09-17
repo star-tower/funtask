@@ -58,3 +58,4 @@ pip install funtask
 
 - [x] local multiprocessing scheduler
 - [ ] k8s + celeary task scheduler
+- [ ] flet webUI
