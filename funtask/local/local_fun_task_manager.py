@@ -61,7 +61,7 @@ def processor_generator(logger: Logger, scope_generator: TransScopeGenerator):
         _global_upsert_dependencies(global_id2mixin, scope_generator.__globals__, dependencies, dependencies_version)
         scope = scope_generator(None)
         while True:
-            task, task_uuid = task_queue.get()
+            task, task_uuid, *arguments = task_queue.get()
             task: FuncTask | TransScopeGenerator
             task = dill.loads(task)
             if task is Flags.STOP:
@@ -78,7 +78,7 @@ def processor_generator(logger: Logger, scope_generator: TransScopeGenerator):
                             dependencies,
                             dependencies_version
                         )
-                        scope = task(scope)
+                        scope = task(scope, *arguments)
                         status_queue.put((task_uuid, TaskStatus.SUCCESS, None))
                     else:
                         _global_upsert_dependencies(
@@ -87,7 +87,7 @@ def processor_generator(logger: Logger, scope_generator: TransScopeGenerator):
                             dependencies,
                             dependencies_version
                         )
-                        result = task(scope, logger)
+                        result = task(scope, logger, *arguments)
                         status_queue.put((task_uuid, TaskStatus.SUCCESS, result))
                 except Exception as e:
                     status_queue.put((task_uuid, TaskStatus.ERROR, e))
@@ -156,11 +156,11 @@ class LocalFunTaskManager(FunTaskManager):
     def get_worker_from_uuid(self, uuid: str) -> Worker:
         return self.workers[uuid][2]
 
-    def dispatch_fun_task(self, worker_uuid: str, func_task: FuncTask) -> Task[_T]:
+    def dispatch_fun_task(self, worker_uuid: str, func_task: FuncTask, *arguments) -> Task[_T]:
         assert func_task, Exception(f"func_task can't be {func_task}")
         _, q, _ = self.workers[worker_uuid]
         task_uuid = str(uuid_generator())
-        q.put_nowait((dill.dumps(func_task), task_uuid))
+        q.put_nowait((dill.dumps(func_task), task_uuid, *arguments))
         task = LocalFunTask(
             task_uuid,
             TaskStatus.QUEUED,

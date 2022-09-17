@@ -57,9 +57,10 @@ class Worker:
 
     def dispatch_fun_task(
             self,
-            func_task: Callable[[Any, 'Logger'], _T]
+            func_task: Callable[[Any, 'Logger'], _T],
+            *arguments
     ) -> 'Task[_T]':
-        return self._task_manager.dispatch_fun_task(self.uuid, func_task)
+        return self._task_manager.dispatch_fun_task(self.uuid, func_task, *arguments)
 
     def regenerate_scope(
             self,
@@ -109,10 +110,17 @@ class LogLevel(AutoName):
     ERROR = auto()  # type: ignore
 
 
-@dataclass
 class Logger:
-    def log(self, level: LogLevel, tags: List[str], msg: str):
+    @abstractmethod
+    def log(self, msg: str, level: LogLevel, tags: List[str]):
         ...
+
+
+class StdLogger(Logger):
+
+    def log(self, msg: str, level: LogLevel = LogLevel.INFO, tags: List[str] = None):
+        tags = tags or ["default"]
+        print(f"{level}-{tags}: {msg}")
 
 
 ScopeGenerator = Callable[[Any], Any]
@@ -165,7 +173,8 @@ class FunTaskManager:
     def dispatch_fun_task(
             self,
             worker_uuid: str,
-            func_task: FuncTask
+            func_task: FuncTask,
+            *arguments
     ) -> Task[_T]:
         ...
 
