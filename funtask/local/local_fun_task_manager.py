@@ -16,11 +16,15 @@ class Flags(AutoName):
 
 class LocalFunTask(Task):
     result = ...
+    error = ...
 
     async def get_result(self) -> _T:
-        while self.result is ...:
+        while self.result is ... and self.error is ...:
             await asyncio.sleep(0.02)
-        return self.result
+        if self.result is not ...:
+            return self.result
+        else:
+            raise self.error
 
     async def get_log(self) -> str | List[str]:
         pass
@@ -49,7 +53,7 @@ def _global_upsert_dependencies(
 
 
 def processor_generator(logger: Logger, scope_generator: TransScopeGenerator):
-    def processor_helper(task_queue: Queue, result_queue: Queue):
+    def processor_helper(task_queue: Queue, status_queue: Queue):
         dependencies = scope_generator.dependencies
         dependencies_version = 0
         # global_id -> (import_mixin, version)
@@ -64,6 +68,7 @@ def processor_generator(logger: Logger, scope_generator: TransScopeGenerator):
                 break
             else:
                 try:
+                    status_queue.put((task_uuid, TaskStatus.RUNNING, None))
                     if getattr(task, "is_scope_regenerator", None):
                         dependencies = task.dependencies
                         dependencies_version += 1
@@ -74,7 +79,7 @@ def processor_generator(logger: Logger, scope_generator: TransScopeGenerator):
                             dependencies_version
                         )
                         scope = task(scope)
-                        result = None
+                        status_queue.put((task_uuid, TaskStatus.SUCCESS, None))
                     else:
                         _global_upsert_dependencies(
                             global_id2mixin,
@@ -83,9 +88,9 @@ def processor_generator(logger: Logger, scope_generator: TransScopeGenerator):
                             dependencies_version
                         )
                         result = task(scope, logger)
+                        status_queue.put((task_uuid, TaskStatus.SUCCESS, result))
                 except Exception as e:
-                    result = e
-                result_queue.put((task_uuid, result))
+                    status_queue.put((task_uuid, TaskStatus.ERROR, e))
 
     return processor_helper
 
@@ -93,14 +98,20 @@ def processor_generator(logger: Logger, scope_generator: TransScopeGenerator):
 class LocalFunTaskManager(FunTaskManager):
     def __init__(self, logger: Logger):
         self.logger = logger
-        self.result_queue = Queue()
+        self.task_status_queue = Queue()
         self.workers: Dict[str, Tuple[Process, Queue, Worker]] = {}
         self.tasks: Dict[str, LocalFunTask] = {}
 
         def result_consumer():
             while True:
-                task_uuid, result = self.result_queue.get(True)
-                self.tasks[task_uuid].result = result
+                task_uuid, status, meta = self.task_status_queue.get(True)
+                task = self.tasks[task_uuid]
+                task.status = status
+                match status:
+                    case TaskStatus.SUCCESS:
+                        task.result = meta
+                    case TaskStatus.ERROR:
+                        task.error = meta
 
         Thread(target=result_consumer).start()
 
@@ -132,7 +143,7 @@ class LocalFunTaskManager(FunTaskManager):
         uuid = str(uuid_generator())
         task_queue = Queue()
         process = Process(target=processor_generator(self.logger, _warp_scope_generator(scope_generator)),
-                          args=(task_queue, self.result_queue))
+                          args=(task_queue, self.task_status_queue))
         worker = Worker(
             uuid,
             WorkerStatus.RUNNING,
@@ -152,7 +163,7 @@ class LocalFunTaskManager(FunTaskManager):
         q.put_nowait((dill.dumps(func_task), task_uuid))
         task = LocalFunTask(
             task_uuid,
-            TaskStatus.RUNNING,
+            TaskStatus.QUEUED,
             self
         )
         self.tasks[task_uuid] = task

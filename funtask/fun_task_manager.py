@@ -75,8 +75,9 @@ class Worker:
 
 @unique
 class TaskStatus(AutoName):
+    QUEUED = auto()  # type: ignore
     RUNNING = auto()  # type: ignore
-    DONE = auto()  # type: ignore
+    SUCCESS = auto()  # type: ignore
     ERROR = auto()  # type: ignore
 
 
