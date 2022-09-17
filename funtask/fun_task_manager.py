@@ -2,7 +2,9 @@ import functools
 from abc import abstractmethod
 from dataclasses import dataclass
 from enum import unique, auto
-from typing import Callable, List, TypeVar, Generic, Any, Optional, Tuple, Union, Dict
+from typing import Callable, List, TypeVar, Generic, Any, Tuple, Union, Dict
+
+from mypy_extensions import VarArg
 
 from funtask.utils import AutoName
 
@@ -57,7 +59,7 @@ class Worker:
 
     def dispatch_fun_task(
             self,
-            func_task: Callable[[Any, 'Logger'], _T],
+            func_task: 'FuncTask',
             *arguments
     ) -> 'Task[_T]':
         return self._task_manager.dispatch_fun_task(self.uuid, func_task, *arguments)
@@ -120,12 +122,12 @@ class StdLogger(Logger):
 
     def log(self, msg: str, level: LogLevel = LogLevel.INFO, tags: List[str] = None):
         tags = tags or ["default"]
-        print(f"{level}-{tags}: {msg}")
+        print(f"{level.value}-{tags}: {msg}")
 
 
 ScopeGenerator = Callable[[Any], Any]
 ScopeGeneratorWithDependencies = Tuple[ScopeGenerator, str | List[str]] | ScopeGenerator | None
-FuncTask = Callable[[Any, Logger], _T]
+FuncTask = Callable[[Any, Logger, VarArg(Any)], _T]
 
 
 class _TransScopeGenerator:
