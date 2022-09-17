@@ -1,9 +1,10 @@
+import asyncio
 from enum import auto
 from uuid import uuid4 as uuid_generator
 from multiprocessing import Queue, Process
 from typing import List, Tuple, Dict
 import dill
-
+from threading import Thread
 from funtask.fun_task_manager import FunTaskManager, Task, Logger, _T, Worker, \
     WorkerStatus, TaskStatus, FuncTask, ScopeGeneratorWithDependencies, _warp_scope_generator, TransScopeGenerator
 from funtask.utils import AutoName, ImportMixInGlobal
@@ -11,6 +12,18 @@ from funtask.utils import AutoName, ImportMixInGlobal
 
 class Flags(AutoName):
     STOP = auto()  # type: ignore
+
+
+class LocalFunTask(Task):
+    result = ...
+
+    async def get_result(self) -> _T:
+        while self.result is ...:
+            await asyncio.sleep(0.02)
+        return self.result
+
+    async def get_log(self) -> str | List[str]:
+        pass
 
 
 def _global_upsert_dependencies(
@@ -45,7 +58,7 @@ def processor_generator(logger: Logger, scope_generator: TransScopeGenerator):
         scope = scope_generator(None)
         while True:
             task, task_uuid = task_queue.get()
-            task: Task | TransScopeGenerator
+            task: FuncTask | TransScopeGenerator
             task = dill.loads(task)
             if task is Flags.STOP:
                 break
@@ -82,7 +95,14 @@ class LocalFunTaskManager(FunTaskManager):
         self.logger = logger
         self.result_queue = Queue()
         self.workers: Dict[str, Tuple[Process, Queue, Worker]] = {}
-        self.tasks: Dict[str, Task] = {}
+        self.tasks: Dict[str, LocalFunTask] = {}
+
+        def result_consumer():
+            while True:
+                task_uuid, result = self.result_queue.get(True)
+                self.tasks[task_uuid].result = result
+
+        Thread(target=result_consumer).start()
 
     def increase_workers(
             self,
@@ -130,7 +150,7 @@ class LocalFunTaskManager(FunTaskManager):
         _, q, _ = self.workers[worker_uuid]
         task_uuid = str(uuid_generator())
         q.put_nowait((dill.dumps(func_task), task_uuid))
-        task = Task(
+        task = LocalFunTask(
             task_uuid,
             TaskStatus.RUNNING,
             self
