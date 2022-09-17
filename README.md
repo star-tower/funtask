@@ -6,7 +6,7 @@
 -----
 FunTask is a Python framework for stateful functional task dispatching and execution
 
-- lightweight and easy
+- lightweight and easy to use
 - scalable and distributed
 - stateful
 - task is just a `function(status, ...args)`
@@ -45,7 +45,6 @@ print("end.")
 - [Features](#features)
 
 ## Installation
-not support for now
 ```console
 pip install funtask
 ```
