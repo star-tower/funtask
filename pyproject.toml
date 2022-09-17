@@ -27,9 +27,9 @@ dependencies = []
 dynamic = ["version"]
 
 [project.urls]
-Documentation = "https://github.com/unknown/funtask#readme"
-Issues = "https://github.com/unknown/funtask/issues"
-Source = "https://github.com/unknown/funtask"
+Documentation = "https://github.com/zqqqqz2000/funtask#readme"
+Issues = "https://github.com/zqqqqz2000/funtask/issues"
+Source = "https://github.com/zqqqqz2000/funtask"
 
 [tool.hatch.version]
 path = "funtask/__about__.py"
@@ -38,6 +38,7 @@ path = "funtask/__about__.py"
 dependencies = [
   "pytest",
   "pytest-cov",
+  "mypy_extensions"
 ]
 [tool.hatch.envs.default.scripts]
 cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=funtask --cov=tests"
