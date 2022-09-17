@@ -1,7 +1,8 @@
+import functools
 from abc import abstractmethod
 from dataclasses import dataclass
 from enum import unique, auto
-from typing import Callable, List, TypeVar, Generic, Any, Optional
+from typing import Callable, List, TypeVar, Generic, Any, Optional, Tuple, Union, Dict
 
 from funtask.utils import AutoName
 
@@ -12,6 +13,40 @@ _T = TypeVar('_T')
 class WorkerStatus(AutoName):
     RUNNING = auto()  # type: ignore
     ERROR = auto()  # type: ignore
+
+
+def _split_generator_and_dependencies(
+        scope_generator: 'ScopeGeneratorWithDependencies'
+) -> Tuple['ScopeGenerator', List[str]]:
+    """
+    change ScopeGeneratorWithDependencies to (ScopeGenerator, [dependencies_str...])
+    :param scope_generator: ScopeGeneratorWithDependencies
+    :return: (ScopeGenerator, [dependencies_str...])
+    """
+    if isinstance(scope_generator, Tuple):
+        generator, dependencies = scope_generator
+        if isinstance(dependencies, str):
+            dependencies = [dependencies]
+    elif scope_generator is None:
+        generator, dependencies = lambda _: None, []
+    else:
+        generator, dependencies = scope_generator, []
+    return generator, dependencies
+
+
+def _warp_scope_generator(scope_generator: 'ScopeGeneratorWithDependencies') -> 'TransScopeGenerator':
+    """
+    warp scope_generator to callable with is_scope_regenerator and dependencies props
+    """
+    scope_generator, dependencies = _split_generator_and_dependencies(scope_generator)
+
+    @functools.wraps(scope_generator)
+    def generator_wrapper(scope):
+        return scope_generator and scope_generator(scope)
+
+    generator_wrapper.is_scope_regenerator = True
+    generator_wrapper.dependencies = dependencies
+    return generator_wrapper
 
 
 @dataclass
@@ -28,7 +63,7 @@ class Worker:
 
     def regenerate_scope(
             self,
-            scope_generator: Optional['ScopeGenerator']
+            scope_generator: 'ScopeGeneratorWithDependencies'
     ):
         return self._task_manager.regenerate_worker_scope(self.uuid, scope_generator)
 
@@ -80,14 +115,29 @@ class Logger:
 
 
 ScopeGenerator = Callable[[Any], Any]
+ScopeGeneratorWithDependencies = Tuple[ScopeGenerator, str | List[str]] | ScopeGenerator | None
 FuncTask = Callable[[Any, Logger], _T]
+
+
+class _TransScopeGenerator:
+    is_scope_regenerator: bool
+    dependencies: List[str]
+
+
+class WithGlobals:
+    __globals__: Dict[str, Any]
+
+
+TransScopeGenerator = Union[Callable[[Any], Any], _TransScopeGenerator, WithGlobals]
 
 
 class FunTaskManager:
     @abstractmethod
     def increase_workers(
             self,
-            scope_generator: ScopeGenerator | List[ScopeGenerator] | None,
+            scope_generator: ScopeGeneratorWithDependencies | List[
+                ScopeGeneratorWithDependencies
+            ] | None,
             number: int = None,
             *args,
             **kwargs
@@ -97,7 +147,7 @@ class FunTaskManager:
     @abstractmethod
     def increase_worker(
             self,
-            scope_generator: ScopeGenerator | List[ScopeGenerator] | None,
+            scope_generator: ScopeGeneratorWithDependencies,
             *args,
             **kwargs
     ) -> Worker:
@@ -129,7 +179,7 @@ class FunTaskManager:
     def regenerate_worker_scope(
             self,
             worker_uuid: str,
-            scope_generator: ScopeGenerator | None
+            scope_generator: ScopeGeneratorWithDependencies
     ):
         ...
 
