@@ -13,6 +13,10 @@ from funtask.utils import ImportMixInGlobal, killable
 _T = TypeVar('_T')
 
 
+def raise_exception(e: Exception):
+    raise e
+
+
 @dataclass
 class WorkerQueue:
     task_queue: Queue[Tuple[bytes, TaskMeta]]
@@ -100,26 +104,25 @@ class WorkerRunner:
 
     async def _async_task_caller(self, func_task: FuncTask, task_meta: TaskMeta):
         try:
-            with killable(task_meta.timeout, mute=False) as kill:
-                self.running_tasks[task_meta.uuid] = kill
-                if task_meta.is_state_generator:
-                    self._global_upsert_dependencies(
-                        func_task.__globals__,
-                        func_task.dependencies,
-                        self.state_version + 1
-                    )
-                    self.dependencies = func_task.dependencies
-                    self.state_version += 1
-                    self.state = await func_task(self.state, self.logger, *task_meta.arguments)
-                    await self.queue.status_queue.put((self.worker_uuid, task_meta.uuid, TaskStatus.SUCCESS, None))
-                else:
-                    self._global_upsert_dependencies(
-                        func_task.__globals__,
-                        self.dependencies,
-                        self.state_version
-                    )
-                    result = await func_task(self.state, self.logger, *task_meta.arguments)
-                    await self.queue.status_queue.put((self.worker_uuid, task_meta.uuid, TaskStatus.SUCCESS, result))
+            self.running_tasks[task_meta.uuid] = lambda: raise_exception(Exception('cannot kill a async task'))
+            if task_meta.is_state_generator:
+                self._global_upsert_dependencies(
+                    func_task.__globals__,
+                    func_task.dependencies,
+                    self.state_version + 1
+                )
+                self.dependencies = func_task.dependencies
+                self.state_version += 1
+                self.state = await func_task(self.state, self.logger, *task_meta.arguments)
+                await self.queue.status_queue.put((self.worker_uuid, task_meta.uuid, TaskStatus.SUCCESS, None))
+            else:
+                self._global_upsert_dependencies(
+                    func_task.__globals__,
+                    self.dependencies,
+                    self.state_version
+                )
+                result = await func_task(self.state, self.logger, *task_meta.arguments)
+                await self.queue.status_queue.put((self.worker_uuid, task_meta.uuid, TaskStatus.SUCCESS, result))
         except Exception as e:
             task_meta and await self.queue.status_queue.put((self.worker_uuid, task_meta.uuid, TaskStatus.ERROR, e))
         finally:

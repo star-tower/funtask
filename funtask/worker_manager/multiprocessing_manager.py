@@ -6,7 +6,6 @@ from funtask import Queue, TaskMeta, TaskStatus, WorkerStatus, TaskControl
 from multiprocessing import Process
 from typing import Tuple, Any, Dict, Callable
 
-from funtask.queue.multiprocessing_queue import MultiprocessingQueue
 from funtask.utils import with_namespace
 from funtask.worker_runner import WorkerRunner, WorkerQueue
 
