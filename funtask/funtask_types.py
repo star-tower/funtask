@@ -52,31 +52,30 @@ class Logger:
 
 class WorkerManager:
     @abstractmethod
-    def increase_worker(
+    async def increase_worker(
             self,
-            worker_uuid: str,
-            task_queue: 'Queue[Tuple[bytes, TaskMeta]]',
+            task_queue_factory: 'Callable[[str], Queue[Tuple[bytes, TaskMeta]]]',
             task_status_queue: 'Queue[Tuple[str, str, TaskStatus | WorkerStatus, Any]]',
-            control_queue: 'Queue[Tuple[str, TaskControl]]',
+            control_queue_factory: 'Callable[[str], Queue[Tuple[str, TaskControl]]]',
             *args,
             **kwargs
-    ):
+    ) -> str:
         ...
 
     @abstractmethod
-    def kill_worker(self, worker_uuid: str):
+    async def kill_worker(self, worker_uuid: str):
         ...
 
     @abstractmethod
-    def stop_worker(self, worker_uuid: str):
+    async def stop_worker(self, worker_uuid: str):
         ...
 
     @abstractmethod
-    def get_task_queue(self, worker_uuid: str) -> 'Queue[Tuple[bytes, TaskMeta]]':
+    async def get_task_queue(self, worker_uuid: str) -> 'Queue[Tuple[bytes, TaskMeta]]':
         ...
 
     @abstractmethod
-    def get_control_queue(self, worker_uuid: str) -> 'Queue[Tuple[str, TaskControl]]':
+    async def get_control_queue(self, worker_uuid: str) -> 'Queue[Tuple[str, TaskControl]]':
         ...
 
 
@@ -97,6 +96,9 @@ TransStateGenerator = Union[FuncTask, _TransStateGenerator, WithGlobals]
 
 
 class Queue(Generic[_T]):
+    type: str
+    config: Dict
+
     @abstractmethod
     async def put(self, obj: _T):
         ...

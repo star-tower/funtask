@@ -7,6 +7,8 @@ from funtask.funtask_types import Queue, _T
 class MultiprocessingQueue(Queue):
     def __init__(self):
         self.q = MltQueue()
+        self.type = 'multiprocessing'
+        self.config = {}
 
     async def put(self, obj: _T):
         self.q.put(obj)

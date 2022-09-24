@@ -6,7 +6,8 @@ from typing import List, TypeVar, Tuple, Generic, Any
 
 import dill
 
-from funtask.funtask_types import StateGeneratorWithDependencies, StateGenerator, TransStateGenerator, FuncTask, TaskStatus, \
+from funtask.funtask_types import StateGeneratorWithDependencies, StateGenerator, TransStateGenerator, FuncTask, \
+    TaskStatus, \
     WorkerManager, QueueFactory, Queue, TaskMeta, TaskControl
 
 _T = TypeVar('_T')
@@ -34,10 +35,6 @@ class Task(Generic[_T]):
             self
     ):
         await self._task_manager.stop_task(self.worker_uuid, self.uuid)
-
-
-def with_namespace(namespace: str, *values: str) -> str:
-    return '#'.join([namespace, *values])
 
 
 def _split_generator_and_dependencies(
@@ -130,13 +127,10 @@ class FunTaskManager:
             *args,
             **kwargs
     ) -> Worker:
-        uuid = str(uuid_generator())
-        worker_task_queue = self.task_queue_factory(with_namespace(self.namespace, 'worker', uuid))
-        self.worker_manager.increase_worker(
-            uuid,
-            worker_task_queue,
+        uuid = await self.worker_manager.increase_worker(
+            self.task_queue_factory,
             self.task_status_queue,
-            self.control_queue_factory(self.namespace),
+            self.control_queue_factory,
             *args,
             **kwargs
         )
@@ -154,7 +148,7 @@ class FunTaskManager:
             *arguments
     ) -> Task[_T]:
         assert func_task, Exception(f"func_task can't be {func_task}")
-        task_queue = self.worker_manager.get_task_queue(worker_uuid)
+        task_queue = await self.worker_manager.get_task_queue(worker_uuid)
         task_uuid = str(uuid_generator())
         await task_queue.put((dill.dumps(func_task), TaskMeta(task_uuid, arguments, is_state_generator=change_status)))
         await self.task_status_queue.put((task_uuid, TaskStatus.QUEUED, None))
@@ -179,19 +173,19 @@ class FunTaskManager:
             worker_uuid: str,
             task_uuid: str
     ):
-        worker_control_queue = self.worker_manager.get_control_queue(worker_uuid)
+        worker_control_queue = await self.worker_manager.get_control_queue(worker_uuid)
         await worker_control_queue.put((task_uuid, TaskControl.KILL))
 
     async def stop_worker(
             self,
             worker_uuid: str
     ):
-        worker_control_queue = self.worker_manager.get_control_queue(worker_uuid)
-        self.worker_manager.stop_worker(worker_uuid)
+        worker_control_queue = await self.worker_manager.get_control_queue(worker_uuid)
+        await self.worker_manager.stop_worker(worker_uuid)
         await worker_control_queue.put((worker_uuid, TaskControl.KILL))
 
     async def kill_worker(
             self,
             worker_uuid: str
     ):
-        self.worker_manager.kill_worker(worker_uuid)
+        await self.worker_manager.kill_worker(worker_uuid)

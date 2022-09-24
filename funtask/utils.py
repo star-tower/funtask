@@ -84,6 +84,10 @@ class KillException(Exception):
     ...
 
 
+def with_namespace(namespace: str, *values: str) -> str:
+    return '#'.join([namespace, *values])
+
+
 @contextmanager
 def killable(timeout: int = None, mute: bool = True):
     assert timeout is None or timeout > 0, Exception("timeout should > 0")
