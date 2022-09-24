@@ -1,94 +1,26 @@
 import functools
 from abc import abstractmethod
 from dataclasses import dataclass
-from enum import unique, auto
-from typing import Callable, List, TypeVar, Generic, Any, Tuple, Union, Dict
+from uuid import uuid4 as uuid_generator
+from typing import List, TypeVar, Tuple, Generic, Any
 
-from mypy_extensions import VarArg
+import dill
 
-from funtask.utils import AutoName
+from funtask.funtask_types import StateGeneratorWithDependencies, StateGenerator, TransStateGenerator, FuncTask, TaskStatus, \
+    WorkerManager, QueueFactory, Queue, TaskMeta, TaskControl
 
 _T = TypeVar('_T')
-
-
-@unique
-class WorkerStatus(AutoName):
-    RUNNING = auto()  # type: ignore
-    ERROR = auto()  # type: ignore
-
-
-def _split_generator_and_dependencies(
-        scope_generator: 'ScopeGeneratorWithDependencies'
-) -> Tuple['ScopeGenerator', List[str]]:
-    """
-    change ScopeGeneratorWithDependencies to (ScopeGenerator, [dependencies_str...])
-    :param scope_generator: ScopeGeneratorWithDependencies
-    :return: (ScopeGenerator, [dependencies_str...])
-    """
-    if isinstance(scope_generator, Tuple):
-        generator, dependencies = scope_generator
-        if isinstance(dependencies, str):
-            dependencies = [dependencies]
-    elif scope_generator is None:
-        generator, dependencies = lambda _: None, []
-    else:
-        generator, dependencies = scope_generator, []
-    return generator, dependencies
-
-
-def _warp_scope_generator(scope_generator: 'ScopeGeneratorWithDependencies') -> 'TransScopeGenerator':
-    """
-    warp scope_generator to callable with is_scope_regenerator and dependencies props
-    """
-    scope_generator, dependencies = _split_generator_and_dependencies(scope_generator)
-
-    @functools.wraps(scope_generator)
-    def generator_wrapper(scope):
-        return scope_generator and scope_generator(scope)
-
-    generator_wrapper.is_scope_regenerator = True
-    generator_wrapper.dependencies = dependencies
-    return generator_wrapper
-
-
-@dataclass
-class Worker:
-    uuid: str
-    status: WorkerStatus
-    _task_manager: 'FunTaskManager'
-
-    def dispatch_fun_task(
-            self,
-            func_task: 'FuncTask',
-            *arguments
-    ) -> 'Task[_T]':
-        return self._task_manager.dispatch_fun_task(self.uuid, func_task, *arguments)
-
-    def regenerate_scope(
-            self,
-            scope_generator: 'ScopeGeneratorWithDependencies'
-    ):
-        return self._task_manager.regenerate_worker_scope(self.uuid, scope_generator)
-
-    def stop(
-            self
-    ):
-        self._task_manager.stop_worker(self.uuid)
-
-
-@unique
-class TaskStatus(AutoName):
-    QUEUED = auto()  # type: ignore
-    RUNNING = auto()  # type: ignore
-    SUCCESS = auto()  # type: ignore
-    ERROR = auto()  # type: ignore
 
 
 @dataclass
 class Task(Generic[_T]):
     uuid: str
-    status: TaskStatus
+    worker_uuid: str
     _task_manager: 'FunTaskManager'
+
+    @abstractmethod
+    async def get_status(self) -> TaskStatus:
+        ...
 
     @abstractmethod
     async def get_result(self) -> _T:
@@ -98,113 +30,167 @@ class Task(Generic[_T]):
     async def get_log(self) -> str | List[str]:
         ...
 
-    def stop(
+    async def stop(
             self
     ):
-        self._task_manager.stop_task(self.uuid)
+        await self._task_manager.stop_task(self.worker_uuid, self.uuid)
 
 
-@unique
-class LogLevel(AutoName):
-    INFO = auto()  # type: ignore
-    DEBUG = auto()  # type: ignore
-    WARNING = auto()  # type: ignore
-    ERROR = auto()  # type: ignore
+def with_namespace(namespace: str, *values: str) -> str:
+    return '#'.join([namespace, *values])
 
 
-class Logger:
-    @abstractmethod
-    def log(self, msg: str, level: LogLevel, tags: List[str]):
-        ...
+def _split_generator_and_dependencies(
+        state_generator: 'StateGeneratorWithDependencies'
+) -> Tuple['StateGenerator', List[str]]:
+    """
+    change StateGeneratorWithDependencies to (StateGenerator, [dependencies_str...])
+    :param state_generator: StateGeneratorWithDependencies
+    :return: (StateGenerator, [dependencies_str...])
+    """
+    if isinstance(state_generator, Tuple):
+        generator, dependencies = state_generator
+        if isinstance(dependencies, str):
+            dependencies = [dependencies]
+    elif state_generator is None:
+        generator, dependencies = lambda _: None, []
+    else:
+        generator, dependencies = state_generator, []
+    return generator, dependencies
 
 
-class StdLogger(Logger):
+def _warp_state_generator(state_generator: 'StateGeneratorWithDependencies') -> 'TransStateGenerator':
+    """
+    warp state_generator to callable with is_state_regenerator and dependencies props
+    """
+    state_generator, dependencies = _split_generator_and_dependencies(state_generator)
 
-    def log(self, msg: str, level: LogLevel = LogLevel.INFO, tags: List[str] = None):
-        tags = tags or ["default"]
-        print(f"{level.value}-{tags}: {msg}")
+    @functools.wraps(state_generator)
+    def generator_wrapper(state):
+        return state_generator and state_generator(state)
 
-
-ScopeGenerator = Callable[[Any], Any]
-ScopeGeneratorWithDependencies = Tuple[ScopeGenerator, str | List[str]] | ScopeGenerator | None
-FuncTask = Callable[[Any, Logger, VarArg(Any)], _T]
-
-
-class _TransScopeGenerator:
-    is_scope_regenerator: bool
-    dependencies: List[str]
+    generator_wrapper.dependencies = dependencies
+    return generator_wrapper
 
 
-class WithGlobals:
-    __globals__: Dict[str, Any]
+@dataclass
+class Worker:
+    uuid: str
+    _task_manager: 'FunTaskManager'
 
+    async def dispatch_fun_task(
+            self,
+            func_task: 'FuncTask',
+            *arguments
+    ) -> 'Task[_T]':
+        return await self._task_manager.dispatch_fun_task(self.uuid, func_task, *arguments)
 
-TransScopeGenerator = Union[Callable[[Any], Any], _TransScopeGenerator, WithGlobals]
+    async def regenerate_state(
+            self,
+            state_generator: 'StateGeneratorWithDependencies'
+    ):
+        return await self._task_manager.generate_worker_state(self.uuid, state_generator)
+
+    async def stop(
+            self
+    ):
+        await self._task_manager.stop_worker(self.uuid)
 
 
 class FunTaskManager:
-    @abstractmethod
-    def increase_workers(
+    def __init__(
             self,
-            scope_generator: ScopeGeneratorWithDependencies | List[
-                ScopeGeneratorWithDependencies
-            ] | None,
+            *,
+            namespace: str,
+            worker_manager: WorkerManager,
+            task_queue_factory: QueueFactory,
+            task_status_queue_factory: QueueFactory,
+            control_queue_factory: QueueFactory,
+            task_status_queue: Queue[Tuple[str, TaskStatus, Any]] = None
+    ):
+        self.worker_manager = worker_manager
+        self.task_queue_factory = task_queue_factory
+        self.control_queue_factory = control_queue_factory
+        self.namespace = namespace
+        self.task_status_queue = task_status_queue or task_status_queue_factory(namespace)
+
+    async def increase_workers(
+            self,
             number: int = None,
             *args,
             **kwargs
     ) -> List[Worker]:
-        ...
+        workers = []
+        for i in range(number - 1):
+            workers.append(await self.increase_worker(*args, **kwargs))
+        return workers
 
-    @abstractmethod
-    def increase_worker(
+    async def increase_worker(
             self,
-            scope_generator: ScopeGeneratorWithDependencies,
             *args,
             **kwargs
     ) -> Worker:
-        ...
+        uuid = str(uuid_generator())
+        worker_task_queue = self.task_queue_factory(with_namespace(self.namespace, 'worker', uuid))
+        self.worker_manager.increase_worker(
+            uuid,
+            worker_task_queue,
+            self.task_status_queue,
+            self.control_queue_factory(self.namespace),
+            *args,
+            **kwargs
+        )
+        worker = Worker(
+            uuid,
+            self
+        )
+        return worker
 
-    @abstractmethod
-    def get_worker_from_uuid(
-            self,
-            uuid: str
-    ) -> Worker:
-        ...
-
-    @abstractmethod
-    def dispatch_fun_task(
+    async def dispatch_fun_task(
             self,
             worker_uuid: str,
             func_task: FuncTask,
             *arguments
     ) -> Task[_T]:
-        ...
+        assert func_task, Exception(f"func_task can't be {func_task}")
+        task_queue = self.worker_manager.get_task_queue(worker_uuid)
+        task_uuid = str(uuid_generator())
+        await task_queue.put((dill.dumps(func_task), TaskMeta(task_uuid, arguments)))
+        await self.task_status_queue.put((task_uuid, TaskStatus.QUEUED, None))
+        task = Task(
+            task_uuid,
+            worker_uuid,
+            self
+        )
+        return task
 
-    @abstractmethod
-    def get_task_from_uuid(
-            self,
-            uuid: str
-    ) -> Task:
-        ...
-
-    @abstractmethod
-    def regenerate_worker_scope(
+    async def generate_worker_state(
             self,
             worker_uuid: str,
-            scope_generator: ScopeGeneratorWithDependencies
-    ):
-        ...
+            state_generator: StateGeneratorWithDependencies
+    ) -> Task[_T]:
+        state_generator = _warp_state_generator(state_generator)
 
-    @abstractmethod
-    def stop_task(
+        return await self.dispatch_fun_task(worker_uuid, state_generator)
+
+    async def stop_task(
             self,
+            worker_uuid: str,
             task_uuid: str
     ):
-        ...
+        worker_control_queue = self.worker_manager.get_control_queue(worker_uuid)
+        await worker_control_queue.put((task_uuid, TaskControl.KILL))
 
-    @abstractmethod
-    def stop_worker(
+    async def stop_worker(
             self,
             worker_uuid: str
     ):
-        ...
+        worker_control_queue = self.worker_manager.get_control_queue(worker_uuid)
+        self.worker_manager.stop_worker(worker_uuid)
+        await worker_control_queue.put((worker_uuid, TaskControl.KILL))
+
+    async def kill_worker(
+            self,
+            worker_uuid: str
+    ):
+        self.worker_manager.kill_worker(worker_uuid)
