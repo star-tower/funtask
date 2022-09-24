@@ -153,13 +153,16 @@ class WorkerRunner:
             self.running_tasks.pop(task_meta.uuid, None)
 
     async def run(self):
+        running_tasks = set()
         threading.Thread(target=lambda: asyncio.run(self.kill_sign_monitor())).start()
         while not self.stopped:
             try:
                 fun_task, task_meta = await get_task_from_queue(self.queue.task_queue)
                 await self.queue.status_queue.put((self.worker_uuid, task_meta.uuid, TaskStatus.RUNNING, None))
-                if asyncio.iscoroutine(fun_task):
-                    asyncio.create_task(self._async_task_caller(fun_task, task_meta))
+                if asyncio.iscoroutinefunction(fun_task):
+                    task = asyncio.create_task(self._async_task_caller(fun_task, task_meta), name=task_meta.uuid)
+                    running_tasks.add(task)
+                    task.add_done_callback(lambda t: running_tasks.remove(t))
                 else:
                     await self._task_caller(fun_task, task_meta)
 

@@ -150,12 +150,13 @@ class FunTaskManager:
             self,
             worker_uuid: str,
             func_task: FuncTask,
+            change_status=False,
             *arguments
     ) -> Task[_T]:
         assert func_task, Exception(f"func_task can't be {func_task}")
         task_queue = self.worker_manager.get_task_queue(worker_uuid)
         task_uuid = str(uuid_generator())
-        await task_queue.put((dill.dumps(func_task), TaskMeta(task_uuid, arguments)))
+        await task_queue.put((dill.dumps(func_task), TaskMeta(task_uuid, arguments, is_state_generator=change_status)))
         await self.task_status_queue.put((task_uuid, TaskStatus.QUEUED, None))
         task = Task(
             task_uuid,
@@ -171,7 +172,7 @@ class FunTaskManager:
     ) -> Task[_T]:
         state_generator = _warp_state_generator(state_generator)
 
-        return await self.dispatch_fun_task(worker_uuid, state_generator)
+        return await self.dispatch_fun_task(worker_uuid, state_generator, change_status=True)
 
     async def stop_task(
             self,

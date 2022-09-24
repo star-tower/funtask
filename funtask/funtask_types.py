@@ -33,7 +33,7 @@ class TaskMeta:
     uuid: str
     arguments: Tuple[Any]
     timeout: float | None = None
-    is_state_generator = False
+    is_state_generator: bool = False
 
 
 @unique

@@ -1,3 +1,4 @@
+import asyncio
 from multiprocessing import Queue as MltQueue
 
 from funtask.funtask_types import Queue, _T
@@ -11,7 +12,11 @@ class MultiprocessingQueue(Queue):
         self.q.put(obj)
 
     async def get(self) -> _T:
-        return self.q.get()
+        while True:
+            try:
+                return self.q.get(timeout=0.001, block=False)
+            except Exception as ignore:
+                await asyncio.sleep(0.01)
 
     async def qsize(self) -> int:
         return self.q.qsize()
