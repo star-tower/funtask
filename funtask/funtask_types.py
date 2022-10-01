@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from enum import unique, auto
 
 from mypy_extensions import VarArg
-from typing import Callable, List, TypeVar, Generic, Any, Tuple, Union, Dict, Awaitable
+from typing import Callable, List, TypeVar, Generic, Any, Tuple, Dict, Awaitable
 
-from funtask.utils import AutoName
+from funtask.utils.enum_utils import AutoName
 
 _T = TypeVar('_T')
 
@@ -28,14 +28,6 @@ class TaskControl(AutoName):
     KILL = auto()
 
 
-@dataclass
-class TaskMeta:
-    uuid: str
-    arguments: Tuple[Any]
-    timeout: float | None = None
-    is_state_generator: bool = False
-
-
 @unique
 class LogLevel(AutoName):
     INFO = auto()
@@ -54,7 +46,7 @@ class WorkerManager:
     @abstractmethod
     async def increase_worker(
             self,
-            task_queue_factory: 'Callable[[str], Queue[Tuple[bytes, TaskMeta]]]',
+            task_queue_factory: 'Callable[[str], Queue[Tuple[bytes, TransTaskMeta]]]',
             task_status_queue: 'Queue[Tuple[str, str, TaskStatus | WorkerStatus, Any]]',
             control_queue_factory: 'Callable[[str], Queue[Tuple[str, TaskControl]]]',
             *args,
@@ -71,7 +63,7 @@ class WorkerManager:
         ...
 
     @abstractmethod
-    async def get_task_queue(self, worker_uuid: str) -> 'Queue[Tuple[bytes, TaskMeta]]':
+    async def get_task_queue(self, worker_uuid: str) -> 'Queue[Tuple[bytes, TransTaskMeta]]':
         ...
 
     @abstractmethod
@@ -79,20 +71,27 @@ class WorkerManager:
         ...
 
 
-StateGenerator = Callable[[Any], Any]
-StateGeneratorWithDependencies = Tuple[StateGenerator, str | List[str]] | StateGenerator | None
 FuncTask = Callable[[Any, Logger, VarArg(Any)], _T] | Callable[[Any, Logger, VarArg(Any)], Awaitable[_T]]
 
 
-class _TransStateGenerator:
+@dataclass
+class TransTask:
+    uuid: str
+    task: FuncTask
     dependencies: List[str]
+    result_as_state: bool
 
 
-class WithGlobals:
-    __globals__: Dict[str, Any]
+@dataclass
+class TransTaskMeta:
+    arguments: Tuple[Any]
+    timeout: float | None = None
 
 
-TransStateGenerator = Union[FuncTask, _TransStateGenerator, WithGlobals]
+class BreakRef:
+    @abstractmethod
+    def if_break_now(self) -> bool:
+        ...
 
 
 class Queue(Generic[_T]):
@@ -105,6 +104,10 @@ class Queue(Generic[_T]):
 
     @abstractmethod
     async def get(self) -> _T:
+        ...
+
+    @abstractmethod
+    async def watch_and_get(self, break_ref: BreakRef) -> _T:
         ...
 
     @abstractmethod

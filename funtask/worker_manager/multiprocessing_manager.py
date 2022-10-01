@@ -1,12 +1,12 @@
 import asyncio
 import uuid
 
-from funtask.funtask_types import WorkerManager, Logger
-from funtask import Queue, TaskMeta, TaskStatus, WorkerStatus, TaskControl
+from funtask.funtask_types import WorkerManager, Logger, TransTaskMeta
+from funtask import Queue, TaskStatus, WorkerStatus, TaskControl
 from multiprocessing import Process
 from typing import Tuple, Any, Dict, Callable
 
-from funtask.utils import with_namespace
+from funtask.utils.namespace import with_namespace
 from funtask.worker_runner import WorkerRunner, WorkerQueue
 
 
@@ -17,7 +17,7 @@ class MultiprocessingManager(WorkerManager):
         self.worker2queues: Dict[str, Tuple[Process, Queue, Queue]] = {}
 
     async def increase_worker(
-            self, task_queue_factory: 'Callable[[str], Queue[Tuple[bytes, TaskMeta]]]',
+            self, task_queue_factory: 'Callable[[str], Queue[Tuple[bytes, TransTaskMeta]]]',
             task_status_queue: 'Queue[Tuple[str, str, TaskStatus | WorkerStatus, Any]]',
             control_queue_factory: 'Callable[[str], Queue[Tuple[str, TaskControl]]]', *args, **kwargs
     ) -> str:
@@ -40,7 +40,7 @@ class MultiprocessingManager(WorkerManager):
     async def stop_worker(self, worker_uuid: str):
         ...
 
-    async def get_task_queue(self, worker_uuid: str) -> 'Queue[Tuple[str, TaskMeta]]':
+    async def get_task_queue(self, worker_uuid: str) -> 'Queue[Tuple[str, TransTaskMeta]]':
         _, task_queue, _ = self.worker2queues[worker_uuid]
         return task_queue
 

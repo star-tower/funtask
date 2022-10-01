@@ -41,6 +41,8 @@ path = "funtask/__about__.py"
 dependencies = [
   "pytest",
   "pytest-cov",
+  "pytest-timeout",
+  "pytest-asyncio"
 ]
 [tool.hatch.envs.default.scripts]
 cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=funtask --cov=tests"
