@@ -6,10 +6,10 @@ import asyncio
 import dill
 from dataclasses import dataclass
 
-from funtask.funtask_types import TaskStatus, Queue, TaskControl, Logger, LogLevel, WorkerStatus, \
+from funtask.core.funtask_types import TaskStatus, Queue, TaskControl, Logger, LogLevel, WorkerStatus, \
     TransTaskMeta, TransTask, BreakRef
-from funtask.utils.killable import killable
-from funtask.utils.sandbox import UnsafeSandbox
+from funtask.core.utils.killable import killable
+from funtask.core.utils.sandbox import UnsafeSandbox
 
 _T = TypeVar('_T')
 
@@ -43,7 +43,7 @@ async def get_task_from_queue(task_queue: Queue[Tuple[bytes, TransTaskMeta]], ki
     return func_task, task_meta
 
 
-class WorkerRunner:
+class Worker:
     def __init__(
             self,
             queue: WorkerQueue,
@@ -98,17 +98,18 @@ class WorkerRunner:
                 self.state = await self.sandbox.async_call_with(
                     [],
                     func_task.task,
-                    self.state, self.logger, *task_meta.arguments
+                    self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
                 )
                 await self.queue.status_queue.put((self.worker_uuid, func_task.uuid, TaskStatus.SUCCESS, None))
             else:
                 result = await self.sandbox.async_call_with(
                     func_task.dependencies,
                     func_task.task,
-                    self.state, self.logger, *task_meta.arguments
+                    self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
                 )
                 await self.queue.status_queue.put((self.worker_uuid, func_task.uuid, TaskStatus.SUCCESS, result))
         except Exception as e:
+            print(e)
             task_meta and await self.queue.status_queue.put((self.worker_uuid, func_task.uuid, TaskStatus.ERROR, e))
         finally:
             self.running_tasks.pop(func_task.uuid, None)
@@ -124,14 +125,14 @@ class WorkerRunner:
                     self.state = self.sandbox.call_with(
                         [],
                         func_task.task,
-                        self.state, self.logger, *task_meta.arguments
+                        self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
                     )
                     await self.queue.status_queue.put((self.worker_uuid, func_task.uuid, TaskStatus.SUCCESS, None))
                 else:
                     result = self.sandbox.call_with(
                         func_task.dependencies,
                         func_task.task,
-                        self.state, self.logger, *task_meta.arguments
+                        self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
                     )
                     await self.queue.status_queue.put((self.worker_uuid, func_task.uuid, TaskStatus.SUCCESS, result))
         except Exception as e:

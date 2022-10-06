@@ -5,7 +5,7 @@ from enum import unique, auto
 from mypy_extensions import VarArg
 from typing import Callable, List, TypeVar, Generic, Any, Tuple, Dict, Awaitable
 
-from funtask.utils.enum_utils import AutoName
+from funtask.core.utils.enum_utils import AutoName
 
 _T = TypeVar('_T')
 
@@ -85,6 +85,7 @@ class TransTask:
 @dataclass
 class TransTaskMeta:
     arguments: Tuple[Any]
+    kw_arguments: Dict[str, Any]
     timeout: float | None = None
 
 

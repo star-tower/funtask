@@ -1,13 +1,16 @@
 import asyncio
 import uuid
 
-from funtask.funtask_types import WorkerManager, Logger, TransTaskMeta
+from funtask.core.funtask_types import WorkerManager, Logger, TransTaskMeta
 from funtask import Queue, TaskStatus, WorkerStatus, TaskControl
 from multiprocessing import Process
+import multiprocessing
 from typing import Tuple, Any, Dict, Callable
 
-from funtask.utils.namespace import with_namespace
-from funtask.worker_runner import WorkerRunner, WorkerQueue
+from funtask.core.utils.namespace import with_namespace
+from funtask.core.worker import Worker, WorkerQueue
+
+multiprocessing.set_start_method('fork')
 
 
 class MultiprocessingManager(WorkerManager):
@@ -24,7 +27,7 @@ class MultiprocessingManager(WorkerManager):
         worker_uuid = str(uuid.uuid4())
         task_queue = task_queue_factory(with_namespace('task_queue', worker_uuid))
         control_queue = control_queue_factory(with_namespace('control_queue', worker_uuid))
-        worker_runner = WorkerRunner(WorkerQueue(
+        worker_runner = Worker(WorkerQueue(
             task_queue=task_queue,
             status_queue=task_status_queue,
             control_queue=control_queue,

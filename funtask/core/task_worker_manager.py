@@ -4,7 +4,7 @@ from typing import List, TypeVar, Tuple, Generic, Any
 
 import dill
 
-from funtask.funtask_types import FuncTask, \
+from funtask.core.funtask_types import FuncTask, \
     TaskStatus, \
     WorkerManager, QueueFactory, Queue, TaskControl, TransTask, TransTaskMeta
 
@@ -80,9 +80,10 @@ class Worker:
     async def dispatch_fun_task(
             self,
             func_task: 'FuncTask',
-            *arguments
+            *arguments,
+            **kwargs
     ) -> 'Task[_T]':
-        return await self._task_manager.dispatch_fun_task(self.uuid, func_task, *arguments)
+        return await self._task_manager.dispatch_fun_task(self.uuid, func_task, *arguments, **kwargs)
 
     async def regenerate_state(
             self,
@@ -151,7 +152,8 @@ class FunTaskManager:
             func_task: TaskInput,
             change_status=False,
             timeout=None,
-            *arguments
+            *arguments,
+            **kwargs
     ) -> Task[_T]:
         assert func_task, Exception(f"func_task can't be {func_task}")
         task_queue = await self.worker_manager.get_task_queue(worker_uuid)
@@ -159,7 +161,7 @@ class FunTaskManager:
         await task_queue.put(
             (
                 dill.dumps(_warp_to_trans_task(task_uuid, func_task, change_status)),
-                TransTaskMeta(arguments, timeout)
+                TransTaskMeta(arguments, kwargs, timeout)
             )
         )
         await self.task_status_queue.put((task_uuid, TaskStatus.QUEUED, None))

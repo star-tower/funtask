@@ -2,7 +2,7 @@ import asyncio
 from multiprocessing import Queue as MltQueue
 from queue import Empty
 
-from funtask.funtask_types import Queue, _T, BreakRef
+from funtask.core.funtask_types import Queue, _T, BreakRef
 
 
 class MultiprocessingQueue(Queue):
