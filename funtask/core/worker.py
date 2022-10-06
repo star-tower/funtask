@@ -95,14 +95,14 @@ class Worker:
                 self.sandbox = UnsafeSandbox(
                     func_task.dependencies
                 )
-                self.state = await self.sandbox.async_call_with(
+                self.state, _ = await self.sandbox.async_call_with(
                     [],
                     func_task.task,
                     self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
                 )
                 await self.queue.status_queue.put((self.worker_uuid, func_task.uuid, TaskStatus.SUCCESS, None))
             else:
-                result = await self.sandbox.async_call_with(
+                result, _ = await self.sandbox.async_call_with(
                     func_task.dependencies,
                     func_task.task,
                     self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
@@ -122,14 +122,14 @@ class Worker:
                     self.sandbox = UnsafeSandbox(
                         func_task.dependencies
                     )
-                    self.state = self.sandbox.call_with(
+                    self.state, _ = self.sandbox.call_with(
                         [],
                         func_task.task,
                         self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
                     )
                     await self.queue.status_queue.put((self.worker_uuid, func_task.uuid, TaskStatus.SUCCESS, None))
                 else:
-                    result = self.sandbox.call_with(
+                    result, _ = self.sandbox.call_with(
                         func_task.dependencies,
                         func_task.task,
                         self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
