@@ -1,21 +1,30 @@
 import asyncio
 import os
+from typing import Dict
 
-from funtask.core.funtask_types import Logger
+from funtask.core.funtask_types import Logger, TaskStatus
 from funtask.core.task_worker_manager import FunTaskManager
 from funtask.loggers.std import StdLogger
 from funtask.queue.multiprocessing_queue import MultiprocessingQueue, MultiprocessingQueueFactory
 from funtask.worker_manager.multiprocessing_manager import MultiprocessingManager
 import pytest
 
-THIS_FILE_IMPORT_PATH = 'tests.core.integration.test_multiprocessing'
+THIS_FILE_IMPORT_PATH = 'tests.integration.test_multiprocessing'
+
+
+async def get_status(manager: FunTaskManager, status_map: Dict[str, TaskStatus]):
+    while True:
+        status = await manager.get_queued_status(.1)
+        if status is not None and status.task_uuid:
+            status_map[status.task_uuid] = status.status
+        if status is None:
+            break
 
 
 @pytest.fixture
 def manager() -> FunTaskManager:
     task_status_queue = MultiprocessingQueue()
     manager = FunTaskManager(
-        namespace="test",
         worker_manager=MultiprocessingManager(
             StdLogger(),
             task_queue_factory=MultiprocessingQueueFactory().factory,
@@ -130,3 +139,32 @@ class TestMultiprocessing:
         exist_no_sys_flag and os.remove('with_no_dependency')
         assert not exist_no_sys_flag
         assert exist_sys_flag
+
+    async def test_task_status(self, manager: FunTaskManager):
+        def sleep(_, __):
+            import time
+            time.sleep(1)
+
+        def err(_, __):
+            raise Exception('just err')
+
+        worker = await manager.increase_worker()
+        task1 = await worker.dispatch_fun_task(sleep)
+        task2 = await worker.dispatch_fun_task(sleep)
+        task_err = await worker.dispatch_fun_task(err)
+        await asyncio.sleep(.5)
+        task_status_map: Dict[str, TaskStatus] = {}
+        await get_status(manager, task_status_map)
+        assert task1.uuid in task_status_map
+        assert task2.uuid in task_status_map
+        assert task_status_map[task1.uuid] == TaskStatus.RUNNING
+        assert task_status_map[task2.uuid] == TaskStatus.QUEUED
+        await asyncio.sleep(1)
+        await get_status(manager, task_status_map)
+        assert task_status_map[task1.uuid] == TaskStatus.SUCCESS
+        assert task_status_map[task2.uuid] == TaskStatus.RUNNING
+        await asyncio.sleep(1)
+        await get_status(manager, task_status_map)
+        await worker.kill()
+        assert task_status_map[task_err.uuid] == TaskStatus.ERROR
+        assert task_status_map[task2.uuid] == TaskStatus.SUCCESS

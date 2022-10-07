@@ -29,7 +29,8 @@ class KillSigCauseBreakGet(BreakRef):
 @dataclass
 class WorkerQueue:
     task_queue: Queue[Tuple[bytes, TransTaskMeta]]
-    status_queue: Queue[Tuple[str, str, TaskStatus | WorkerStatus, Any]]
+    # worker_uuid, task_uuid, status, content
+    status_queue: Queue[Tuple[str, str | None, TaskStatus | WorkerStatus, Any]]
     control_queue: Queue[Tuple[str, TaskControl]]
 
 
@@ -67,7 +68,7 @@ class Worker:
                 if time.time() - last_heart_beat > 5:
                     await self.queue.status_queue.put((
                         self.worker_uuid,
-                        'worker',
+                        None,
                         WorkerStatus.HEARTBEAT,
                         None
                     ))

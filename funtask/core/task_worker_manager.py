@@ -6,7 +6,7 @@ import dill
 
 from funtask.core.funtask_types import FuncTask, \
     TaskStatus, \
-    WorkerManager, QueueFactory, Queue, TaskControl, TransTask, TransTaskMeta
+    WorkerManager, Queue, TaskControl, TransTask, TransTaskMeta, WorkerStatus
 
 _T = TypeVar('_T')
 
@@ -73,6 +73,14 @@ def _warp_to_trans_task(
 
 
 @dataclass
+class StatusReport:
+    worker_uuid: str
+    task_uuid: str | None
+    status: TaskStatus | WorkerStatus
+    content: Any
+
+
+@dataclass
 class Worker:
     uuid: str
     _task_manager: 'FunTaskManager'
@@ -104,12 +112,11 @@ class FunTaskManager:
     def __init__(
             self,
             *,
-            namespace: str,
             worker_manager: WorkerManager,
-            task_status_queue: Queue[Tuple[str, TaskStatus, Any]]
+            # worker_uuid, task_uuid, status, content
+            task_status_queue: Queue[Tuple[str, str | None, TaskStatus | WorkerStatus, Any]]
     ):
         self.worker_manager = worker_manager
-        self.namespace = namespace
         self.task_status_queue = task_status_queue
 
     async def increase_workers(
@@ -156,7 +163,7 @@ class FunTaskManager:
                 TransTaskMeta(arguments, kwargs, timeout)
             )
         )
-        await self.task_status_queue.put((task_uuid, TaskStatus.QUEUED, None))
+        await self.task_status_queue.put((worker_uuid, task_uuid, TaskStatus.QUEUED, None))
         task = Task(
             task_uuid,
             worker_uuid,
@@ -200,3 +207,18 @@ class FunTaskManager:
             worker_uuid: str
     ):
         await self.worker_manager.kill_worker(worker_uuid)
+
+    async def get_queued_status(
+            self,
+            timeout: None | float = None
+    ) -> StatusReport | None:
+        res = await self.task_status_queue.get(timeout)
+        if res is None:
+            return None
+        worker_uuid, task_uuid, status, content = res
+        return StatusReport(
+            worker_uuid,
+            task_uuid,
+            status,
+            content
+        )
