@@ -5,7 +5,7 @@ from queue import Empty
 from typing import Dict
 
 from funtask.core.funtask_types import Queue, _T, BreakRef
-from funtask.queue.common import NeverBreak
+from funtask.providers.queue.common import NeverBreak
 
 
 class MultiprocessingQueueFactory:

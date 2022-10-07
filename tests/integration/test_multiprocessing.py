@@ -4,9 +4,9 @@ from typing import Dict
 
 from funtask.core.funtask_types import Logger, TaskStatus
 from funtask.core.task_worker_manager import FunTaskManager
-from funtask.loggers.std import StdLogger
-from funtask.queue.multiprocessing_queue import MultiprocessingQueue, MultiprocessingQueueFactory
-from funtask.worker_manager.multiprocessing_manager import MultiprocessingManager
+from funtask.providers.loggers.std import StdLogger
+from funtask.providers.queue.multiprocessing_queue import MultiprocessingQueue, MultiprocessingQueueFactory
+from funtask.providers.worker_manager.multiprocessing_manager import MultiprocessingManager
 import pytest
 
 THIS_FILE_IMPORT_PATH = 'tests.integration.test_multiprocessing'
