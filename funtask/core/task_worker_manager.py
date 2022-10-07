@@ -106,16 +106,11 @@ class FunTaskManager:
             *,
             namespace: str,
             worker_manager: WorkerManager,
-            task_queue_factory: QueueFactory,
-            task_status_queue_factory: QueueFactory,
-            control_queue_factory: QueueFactory,
-            task_status_queue: Queue[Tuple[str, TaskStatus, Any]] = None
+            task_status_queue: Queue[Tuple[str, TaskStatus, Any]]
     ):
         self.worker_manager = worker_manager
-        self.task_queue_factory = task_queue_factory
-        self.control_queue_factory = control_queue_factory
         self.namespace = namespace
-        self.task_status_queue = task_status_queue or task_status_queue_factory(namespace)
+        self.task_status_queue = task_status_queue
 
     async def increase_workers(
             self,
@@ -134,9 +129,6 @@ class FunTaskManager:
             **kwargs
     ) -> Worker:
         uuid = await self.worker_manager.increase_worker(
-            self.task_queue_factory,
-            self.task_status_queue,
-            self.control_queue_factory,
             *args,
             **kwargs
         )

@@ -149,6 +149,8 @@ class Worker:
                     self.queue.task_queue,
                     KillSigCauseBreakGet(self)
                 )
+                # if (func_task, task_meta) is (None, None) the self.stopped must be True
+                # because KillSigCauseBreakGet will set it
                 if self.stopped:
                     break
                 await self.queue.status_queue.put((self.worker_uuid, func_task.uuid, TaskStatus.RUNNING, None))

@@ -1,8 +1,22 @@
 import asyncio
 from multiprocessing import Queue as MltQueue
 from queue import Empty
+from typing import Dict
 
 from funtask.core.funtask_types import Queue, _T, BreakRef
+from funtask.queue.common import NeverBreak
+
+
+class MultiprocessingQueueFactory:
+    def __init__(self):
+        self.queues: Dict[str, Queue] = {}
+
+    def factory(self, name: str):
+        if name in self.queues:
+            return self.queues[name]
+        q = MultiprocessingQueue()
+        self.queues[name] = q
+        return q
 
 
 class MultiprocessingQueue(Queue):
@@ -24,11 +38,7 @@ class MultiprocessingQueue(Queue):
         self.q.put(obj)
 
     async def get(self) -> _T:
-        while True:
-            try:
-                return self.q.get(timeout=0.001, block=True)
-            except Empty:
-                await asyncio.sleep(0.01)
+        return await self.watch_and_get(NeverBreak())
 
     async def qsize(self) -> int:
         return self.q.qsize()

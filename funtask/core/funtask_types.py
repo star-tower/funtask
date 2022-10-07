@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from enum import unique, auto
 
 from mypy_extensions import VarArg
-from typing import Callable, List, TypeVar, Generic, Any, Tuple, Dict, Awaitable
+from typing import Callable, List, TypeVar, Generic, Any, Tuple, Dict, Awaitable, AsyncIterator
 
 from funtask.core.utils.enum_utils import AutoName
 
@@ -16,6 +16,7 @@ class TaskStatus(AutoName):
     RUNNING = auto()
     SUCCESS = auto()
     ERROR = auto()
+    DIED = auto()
 
 
 @unique
@@ -46,9 +47,6 @@ class WorkerManager:
     @abstractmethod
     async def increase_worker(
             self,
-            task_queue_factory: 'Callable[[str], Queue[Tuple[bytes, TransTaskMeta]]]',
-            task_status_queue: 'Queue[Tuple[str, str, TaskStatus | WorkerStatus, Any]]',
-            control_queue_factory: 'Callable[[str], Queue[Tuple[str, TaskControl]]]',
             *args,
             **kwargs
     ) -> str:
@@ -121,3 +119,33 @@ class Queue(Generic[_T]):
 
 
 QueueFactory = Callable[[str], Queue]
+
+
+class KVDB:
+    @abstractmethod
+    async def set(self, key: str, value: bytes):
+        ...
+
+    @abstractmethod
+    async def get(self, key: str) -> bytes:
+        ...
+
+    @abstractmethod
+    async def delete(self, key: str):
+        ...
+
+    @abstractmethod
+    async def foreach(self, key: str) -> AsyncIterator[bytes]:
+        ...
+
+    @abstractmethod
+    async def push(self, key: str, *value: bytes):
+        ...
+
+    @abstractmethod
+    async def random_pop(self, key: str) -> bytes:
+        ...
+
+    @abstractmethod
+    async def remove(self, key: str, *items: bytes):
+        ...

@@ -4,7 +4,7 @@ import os
 from funtask.core.funtask_types import Logger
 from funtask.core.task_worker_manager import FunTaskManager
 from funtask.loggers.std import StdLogger
-from funtask.queue.multiprocessing_queue import MultiprocessingQueue
+from funtask.queue.multiprocessing_queue import MultiprocessingQueue, MultiprocessingQueueFactory
 from funtask.worker_manager.multiprocessing_manager import MultiprocessingManager
 import pytest
 
@@ -13,12 +13,17 @@ THIS_FILE_IMPORT_PATH = 'tests.core.integration.test_multiprocessing'
 
 @pytest.fixture
 def manager() -> FunTaskManager:
+    task_status_queue = MultiprocessingQueue()
     manager = FunTaskManager(
         namespace="test",
-        worker_manager=MultiprocessingManager(StdLogger()),
-        task_queue_factory=lambda _: MultiprocessingQueue(),
-        task_status_queue_factory=lambda _: MultiprocessingQueue(),
-        control_queue_factory=lambda _: MultiprocessingQueue(),
+        worker_manager=MultiprocessingManager(
+            StdLogger(),
+            task_queue_factory=MultiprocessingQueueFactory().factory,
+            control_queue_factory=MultiprocessingQueueFactory().factory,
+            task_status_queue=task_status_queue
+        ),
+        task_status_queue=task_status_queue
+
     )
     yield manager
 
