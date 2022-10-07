@@ -2,17 +2,14 @@ from dataclasses import dataclass
 from uuid import uuid4 as uuid_generator
 from typing import List, TypeVar, Tuple, Generic, Any
 
-import dill
-
-from funtask.core.funtask_types import FuncTask, \
-    TaskStatus, \
-    WorkerManager, Queue, TaskControl, TransTask, TransTaskMeta, WorkerStatus
+from funtask.core.funtask_types import FuncTask, TaskStatus, StatusQueueMessage, \
+    WorkerManager, Queue, TaskControl, Task, TaskMeta, WorkerStatus, ControlQueueMessage, TaskQueueMessage
 
 _T = TypeVar('_T')
 
 
 @dataclass
-class Task(Generic[_T]):
+class TaskInstance(Generic[_T]):
     uuid: str
     worker_uuid: str
     _task_manager: 'FunTaskManager'
@@ -53,7 +50,7 @@ def _warp_to_trans_task(
         uuid: str,
         task: TaskInput,
         result_as_state: bool
-) -> TransTask:
+) -> Task:
     """
     warp state_generator to callable with is_state_regenerator and dependencies props
     """
@@ -64,7 +61,7 @@ def _warp_to_trans_task(
     else:
         none_is_executable_wrapper = task
 
-    return TransTask(
+    return Task(
         uuid=uuid,
         task=none_is_executable_wrapper,
         dependencies=dependencies,
@@ -78,10 +75,11 @@ class StatusReport:
     task_uuid: str | None
     status: TaskStatus | WorkerStatus
     content: Any
+    create_timestamp: float
 
 
 @dataclass
-class Worker:
+class WorkerInstance:
     uuid: str
     _task_manager: 'FunTaskManager'
 
@@ -90,7 +88,7 @@ class Worker:
             func_task: 'FuncTask',
             *arguments,
             **kwargs
-    ) -> 'Task[_T]':
+    ) -> 'TaskInstance[_T]':
         return await self._task_manager.dispatch_fun_task(self.uuid, func_task, *arguments, **kwargs)
 
     async def regenerate_state(
@@ -114,7 +112,7 @@ class FunTaskManager:
             *,
             worker_manager: WorkerManager,
             # worker_uuid, task_uuid, status, content
-            task_status_queue: Queue[Tuple[str, str | None, TaskStatus | WorkerStatus, Any]]
+            task_status_queue: Queue[StatusQueueMessage]
     ):
         self.worker_manager = worker_manager
         self.task_status_queue = task_status_queue
@@ -124,7 +122,7 @@ class FunTaskManager:
             number: int = None,
             *args,
             **kwargs
-    ) -> List[Worker]:
+    ) -> List[WorkerInstance]:
         workers = []
         for i in range(number - 1):
             workers.append(await self.increase_worker(*args, **kwargs))
@@ -134,12 +132,12 @@ class FunTaskManager:
             self,
             *args,
             **kwargs
-    ) -> Worker:
+    ) -> WorkerInstance:
         uuid = await self.worker_manager.increase_worker(
             *args,
             **kwargs
         )
-        worker = Worker(
+        worker = WorkerInstance(
             uuid,
             self
         )
@@ -153,18 +151,18 @@ class FunTaskManager:
             timeout=None,
             *arguments,
             **kwargs
-    ) -> Task[_T]:
+    ) -> TaskInstance[_T]:
         assert func_task, Exception(f"func_task can't be {func_task}")
         task_queue = await self.worker_manager.get_task_queue(worker_uuid)
         task_uuid = str(uuid_generator())
         await task_queue.put(
-            (
-                dill.dumps(_warp_to_trans_task(task_uuid, func_task, change_status)),
-                TransTaskMeta(arguments, kwargs, timeout)
+            TaskQueueMessage(
+                _warp_to_trans_task(task_uuid, func_task, change_status),
+                TaskMeta(arguments, kwargs, timeout)
             )
         )
-        await self.task_status_queue.put((worker_uuid, task_uuid, TaskStatus.QUEUED, None))
-        task = Task(
+        await self.task_status_queue.put(StatusQueueMessage(worker_uuid, task_uuid, TaskStatus.QUEUED, None))
+        task = TaskInstance(
             task_uuid,
             worker_uuid,
             self
@@ -177,7 +175,7 @@ class FunTaskManager:
             state_generator: TaskInput,
             timeout=None,
             *arguments
-    ) -> Task[_T]:
+    ) -> TaskInstance[_T]:
         return await self.dispatch_fun_task(
             worker_uuid,
             state_generator,
@@ -192,7 +190,7 @@ class FunTaskManager:
             task_uuid: str
     ):
         worker_control_queue = await self.worker_manager.get_control_queue(worker_uuid)
-        await worker_control_queue.put((task_uuid, TaskControl.KILL))
+        await worker_control_queue.put(ControlQueueMessage(task_uuid, TaskControl.KILL))
 
     async def stop_worker(
             self,
@@ -200,7 +198,7 @@ class FunTaskManager:
     ):
         worker_control_queue = await self.worker_manager.get_control_queue(worker_uuid)
         await self.worker_manager.stop_worker(worker_uuid)
-        await worker_control_queue.put((worker_uuid, TaskControl.KILL))
+        await worker_control_queue.put(ControlQueueMessage(worker_uuid, TaskControl.KILL))
 
     async def kill_worker(
             self,
@@ -215,10 +213,10 @@ class FunTaskManager:
         res = await self.task_status_queue.get(timeout)
         if res is None:
             return None
-        worker_uuid, task_uuid, status, content = res
         return StatusReport(
-            worker_uuid,
-            task_uuid,
-            status,
-            content
+            res.worker_uuid,
+            res.task_uuid,
+            res.status,
+            res.content,
+            res.create_timestamp
         )

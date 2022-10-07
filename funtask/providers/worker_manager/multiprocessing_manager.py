@@ -1,11 +1,11 @@
 import asyncio
 import uuid
 
-from funtask.core.funtask_types import WorkerManager, Logger, TransTaskMeta, QueueFactory
-from funtask import Queue, TaskControl
+from funtask.core.funtask_types import WorkerManager, Logger, QueueFactory, TaskQueueMessage, ControlQueueMessage
+from funtask import Queue
 from multiprocessing import Process
 import multiprocessing
-from typing import Tuple, Dict
+from typing import Dict
 
 from funtask.core.utils.namespace import with_namespace
 from funtask.core.worker import Worker, WorkerQueue
@@ -50,8 +50,8 @@ class MultiprocessingManager(WorkerManager):
     async def stop_worker(self, worker_uuid: str):
         ...
 
-    async def get_task_queue(self, worker_uuid: str) -> 'Queue[Tuple[bytes, TransTaskMeta]]':
+    async def get_task_queue(self, worker_uuid: str) -> 'Queue[TaskQueueMessage]':
         return self.task_queue_factory(with_namespace('task_queue', worker_uuid))
 
-    async def get_control_queue(self, worker_uuid: str) -> 'Queue[Tuple[bytes, TaskControl]]':
+    async def get_control_queue(self, worker_uuid: str) -> 'Queue[ControlQueueMessage]':
         return self.control_queue_factory(with_namespace('control_queue', worker_uuid))

@@ -1,5 +1,6 @@
+import time
 from abc import abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import unique, auto
 
 from mypy_extensions import VarArg
@@ -61,11 +62,11 @@ class WorkerManager:
         ...
 
     @abstractmethod
-    async def get_task_queue(self, worker_uuid: str) -> 'Queue[Tuple[bytes, TransTaskMeta]]':
+    async def get_task_queue(self, worker_uuid: str) -> 'Queue[TaskQueueMessage]':
         ...
 
     @abstractmethod
-    async def get_control_queue(self, worker_uuid: str) -> 'Queue[Tuple[str, TaskControl]]':
+    async def get_control_queue(self, worker_uuid: str) -> 'Queue[ControlQueueMessage]':
         ...
 
 
@@ -73,7 +74,7 @@ FuncTask = Callable[[Any, Logger, VarArg(Any)], _T] | Callable[[Any, Logger, Var
 
 
 @dataclass
-class TransTask:
+class Task:
     uuid: str
     task: FuncTask
     dependencies: List[str]
@@ -81,7 +82,7 @@ class TransTask:
 
 
 @dataclass
-class TransTaskMeta:
+class TaskMeta:
     arguments: Tuple[Any]
     kw_arguments: Dict[str, Any]
     timeout: float | None = None
@@ -155,3 +156,34 @@ class KVDB:
     @abstractmethod
     async def remove(self, key: str, *items: bytes):
         ...
+
+
+@dataclass
+class TaskQueueMessage:
+    task: 'Task'
+    task_meta: 'TaskMeta'
+    create_timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class StatusQueueMessage:
+    worker_uuid: str
+    task_uuid: None | str
+    status: TaskStatus | WorkerStatus
+    content: Any
+    create_timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class ControlQueueMessage:
+    worker_uuid: str
+    control_sig: TaskControl
+    create_timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class WorkerQueue:
+    task_queue: Queue[TaskQueueMessage]
+    status_queue: Queue[StatusQueueMessage]
+    control_queue: Queue[ControlQueueMessage]
+    create_timestamp: float = field(default_factory=time.time)

@@ -4,6 +4,8 @@ from multiprocessing import Queue as MltQueue
 from queue import Empty
 from typing import Dict
 
+import dill
+
 from funtask.core.funtask_types import Queue, _T, BreakRef
 from funtask.providers.queue.common import NeverBreak
 
@@ -32,14 +34,14 @@ class MultiprocessingQueue(Queue):
             if timeout and time.time() - start_time >= timeout:
                 return None
             try:
-                return self.q.get(timeout=0.001, block=True)
+                return dill.loads(self.q.get(timeout=0.001, block=True))
             except Empty:
                 if break_ref.if_break_now():
                     break
                 await asyncio.sleep(0.01)
 
     async def put(self, obj: _T):
-        self.q.put(obj)
+        self.q.put(dill.dumps(obj))
 
     async def get(self, timeout: None | float = None) -> _T:
         return await self.watch_and_get(NeverBreak(), timeout)
