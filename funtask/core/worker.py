@@ -63,7 +63,7 @@ class Worker:
         last_heart_beat = time.time()
         while True:
             try:
-                task_or_worker_uuid, sig = await self.queue.control_queue.get()
+                control = await self.queue.control_queue.get(timeout=1)
                 if time.time() - last_heart_beat > 5:
                     await self.queue.status_queue.put((
                         self.worker_uuid,
@@ -72,6 +72,9 @@ class Worker:
                         None
                     ))
                     last_heart_beat = time.time()
+                if control is None:
+                    continue
+                task_or_worker_uuid, sig = control
                 match sig:
                     case TaskControl.KILL:
                         if task_or_worker_uuid == self.worker_uuid:

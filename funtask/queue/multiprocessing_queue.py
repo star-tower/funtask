@@ -1,4 +1,5 @@
 import asyncio
+import time
 from multiprocessing import Queue as MltQueue
 from queue import Empty
 from typing import Dict
@@ -25,8 +26,11 @@ class MultiprocessingQueue(Queue):
         self.type = 'multiprocessing'
         self.config = {}
 
-    async def watch_and_get(self, break_ref: BreakRef) -> _T:
+    async def watch_and_get(self, break_ref: BreakRef, timeout: None | float = None) -> _T:
+        start_time = time.time()
         while True:
+            if timeout and time.time() - start_time >= timeout:
+                return None
             try:
                 return self.q.get(timeout=0.001, block=True)
             except Empty:
@@ -37,8 +41,8 @@ class MultiprocessingQueue(Queue):
     async def put(self, obj: _T):
         self.q.put(obj)
 
-    async def get(self) -> _T:
-        return await self.watch_and_get(NeverBreak())
+    async def get(self, timeout: None | float = None) -> _T:
+        return await self.watch_and_get(NeverBreak(), timeout)
 
     async def qsize(self) -> int:
         return self.q.qsize()

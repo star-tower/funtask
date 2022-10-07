@@ -102,11 +102,17 @@ class Queue(Generic[_T]):
         ...
 
     @abstractmethod
-    async def get(self) -> _T:
+    async def get(self, timeout: None | float = None) -> _T:
+        """
+        timeout will return None
+        """
         ...
 
     @abstractmethod
-    async def watch_and_get(self, break_ref: BreakRef) -> _T:
+    async def watch_and_get(self, break_ref: BreakRef, timeout: None | float = None) -> _T:
+        """
+        timeout or break flag in break_ref is true will return None
+        """
         ...
 
     @abstractmethod

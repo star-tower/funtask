@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 import dill
 
@@ -28,11 +29,14 @@ class RedisQueue(Queue):
     async def put(self, obj: _T):
         await self.r.sadd(dill.dumps(obj))
 
-    async def get(self) -> _T:
-        return await self.watch_and_get(NeverBreak())
+    async def get(self, timeout: None | float = None) -> _T:
+        return await self.watch_and_get(NeverBreak(), timeout)
 
-    async def watch_and_get(self, break_ref: BreakRef) -> _T:
+    async def watch_and_get(self, break_ref: BreakRef, timeout: None | float = None) -> _T:
+        start_time = time.time()
         while True:
+            if timeout and time.time() - start_time >= timeout:
+                return None
             content = self.r.spop(self.qid)
             if break_ref.if_break_now():
                 return None
