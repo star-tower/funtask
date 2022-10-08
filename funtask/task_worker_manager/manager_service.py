@@ -1,7 +1,8 @@
 from typing import AsyncIterator
 
 import dill
-
+from dependency_injector.wiring import Provide, inject
+from grpclib.server import Server
 from funtask.common.grpc import load_args, core_status2rpc_status
 from funtask.core.task_worker_manager import FunTaskManager
 from funtask.generated.manager import TaskWorkerManagerBase, IncreaseWorkerRequest, \
@@ -65,3 +66,23 @@ class ManagerService(TaskWorkerManagerBase):
                 create_timestamp=status.create_timestamp,
                 **core_status2rpc_status(status.status)
             ))
+
+
+class ManagerServiceRunner:
+    @inject
+    def __init__(
+            self,
+            fun_task_manager: FunTaskManager = Provide['task_worker_manager.fun_task_manager'],
+            address: str = Provide['task_worker_manager.rpc_address'],
+            port: int = Provide['task_worker_manager.rpc_port']
+    ):
+        self.fun_task_manager = fun_task_manager
+        self.address = address
+        self.port = port
+
+    async def run(self):
+        server = Server([ManagerService(
+            self.fun_task_manager
+        )])
+        await server.start(self.address, self.port)
+        await server.wait_closed()

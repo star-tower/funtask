@@ -32,7 +32,6 @@ def manager() -> FunTaskManager:
             task_status_queue=task_status_queue
         ),
         task_status_queue=task_status_queue
-
     )
     yield manager
 
