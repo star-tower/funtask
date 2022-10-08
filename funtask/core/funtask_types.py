@@ -6,7 +6,7 @@ from enum import unique, auto
 from mypy_extensions import VarArg
 from typing import Callable, List, TypeVar, Generic, Any, Tuple, Dict, Awaitable, AsyncIterator
 
-from funtask.core.utils.enum_utils import AutoName
+from funtask.utils.enum_utils import AutoName
 
 _T = TypeVar('_T')
 

@@ -7,7 +7,7 @@ from multiprocessing import Process
 import multiprocessing
 from typing import Dict
 
-from funtask.core.utils.namespace import with_namespace
+from funtask.utils.namespace import with_namespace
 from funtask.core.worker import Worker, WorkerQueue
 
 multiprocessing.set_start_method('fork')

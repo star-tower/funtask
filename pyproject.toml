@@ -26,7 +26,8 @@ classifiers = [
 dependencies = [
   "mypy_extensions~=0.4.3",
   "dill~=0.3.5.1",
-  "betterproto~=1.2.5"
+  "betterproto~=2.0.0b5",
+  "dependency-injector~=4.40.0"
 ]
 dynamic = ["version"]
 

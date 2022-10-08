@@ -6,8 +6,8 @@ import asyncio
 
 from funtask.core.funtask_types import TaskStatus, Queue, TaskControl, Logger, LogLevel, WorkerStatus, \
     TaskMeta, Task, BreakRef, TaskQueueMessage, StatusQueueMessage, WorkerQueue
-from funtask.core.utils.killable import killable
-from funtask.core.utils.sandbox import UnsafeSandbox
+from funtask.utils.killable import killable
+from funtask.utils.sandbox import UnsafeSandbox
 
 _T = TypeVar('_T')
 

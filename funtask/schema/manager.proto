@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package manager;
+import "types.proto";
+
+message Empty {}
+
+message IncreaseWorkersRequest {
+  uint32 number = 1;
+  Args other_args = 2;
+}
+
+message IncreaseWorkerRequest {
+  Args args = 1;
+}
+
+message IncreaseWorkerResponse {
+  Worker worker = 1;
+}
+
+message IncreaseWorkersResponse {
+  repeated Worker worker = 1;
+}
+
+message DispatchFunTaskRequest {
+  string worker_uuid = 1;
+  bytes serialized_fun_task = 2;
+  bool change_status = 3;
+  optional float timeout = 4;
+  Args other_args = 5;
+}
+
+message Worker {
+  string uuid = 1;
+}
+
+message Task {
+  string uuid = 1;
+}
+
+message DispatchFunTaskResponse {
+  Task task = 1;
+}
+
+message StopTaskRequest {
+  string worker_uuid = 1;
+  string task_uuid = 2;
+}
+
+message StopWorkerRequest {
+  string worker_uuid = 1;
+}
+
+message KillWorkerRequest {
+  string worker_uuid = 1;
+}
+
+message StatusReport {
+  string worker_uuid = 1;
+  optional string task_uuid = 2;
+  enum WorkerStatus {
+    HEARTBEAT = 0;
+  }
+  enum TaskStatus {
+    QUEUED = 0;
+    RUNNING = 1;
+    SUCCESS = 2;
+    ERROR = 3;
+  }
+  oneof status {
+    TaskStatus task_status = 4;
+    WorkerStatus worker_status = 5;
+  }
+  bytes serialized_content = 6;
+  float create_timestamp = 7;
+}
+
+message GetQueuedStatusResponse {
+  StatusReport status_report = 1;
+}
+
+
+service TaskWorkerManager {
+  rpc IncreaseWorkers(IncreaseWorkersRequest) returns (IncreaseWorkersResponse);
+  rpc IncreaseWorker(IncreaseWorkerRequest) returns (IncreaseWorkerResponse);
+  rpc DispatchFunTask(DispatchFunTaskRequest) returns (DispatchFunTaskResponse);
+  rpc StopTask(StopTaskRequest) returns (Empty);
+  rpc StopWorker(StopWorkerRequest) returns (Empty);
+  rpc KillWorker(KillWorkerRequest) returns (Empty);
+  rpc GetQueuedStatus(Empty) returns (stream GetQueuedStatusResponse);
+}

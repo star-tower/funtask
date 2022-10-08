@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package manager;
+
+message Args {
+  bytes serialized_args = 2;
+  bytes serialized_kwargs = 3;
+}
