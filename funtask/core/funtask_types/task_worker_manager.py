@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import unique, auto
 
 from mypy_extensions import VarArg
-from typing import Callable, List, TypeVar, Generic, Any, Tuple, Dict, Awaitable, AsyncIterator
+from typing import Callable, List, TypeVar, Generic, Any, Tuple, Dict, Awaitable, AsyncIterator, NewType
 
 from funtask.utils.enum_utils import AutoName
 
@@ -50,23 +50,23 @@ class WorkerManager:
             self,
             *args,
             **kwargs
-    ) -> str:
+    ) -> 'WorkerUUID':
         ...
 
     @abstractmethod
-    async def kill_worker(self, worker_uuid: str):
+    async def kill_worker(self, worker_uuid: 'WorkerUUID'):
         ...
 
     @abstractmethod
-    async def stop_worker(self, worker_uuid: str):
+    async def stop_worker(self, worker_uuid: 'WorkerUUID'):
         ...
 
     @abstractmethod
-    async def get_task_queue(self, worker_uuid: str) -> 'Queue[TaskQueueMessage]':
+    async def get_task_queue(self, worker_uuid: 'WorkerUUID') -> 'Queue[TaskQueueMessage]':
         ...
 
     @abstractmethod
-    async def get_control_queue(self, worker_uuid: str) -> 'Queue[ControlQueueMessage]':
+    async def get_control_queue(self, worker_uuid: 'WorkerUUID') -> 'Queue[ControlQueueMessage]':
         ...
 
 
@@ -75,7 +75,7 @@ FuncTask = Callable[[Any, Logger, VarArg(Any)], _T] | Callable[[Any, Logger, Var
 
 @dataclass
 class Task:
-    uuid: str
+    uuid: 'TaskUUID'
     task: FuncTask
     dependencies: List[str]
     result_as_state: bool
@@ -127,6 +127,9 @@ class Queue(Generic[_T]):
 
 QueueFactory = Callable[[str], Queue]
 
+WorkerUUID = NewType("WorkerUUID", str)
+TaskUUID = NewType("TaskUUID", str)
+
 
 class KVDB:
     @abstractmethod
@@ -167,8 +170,8 @@ class TaskQueueMessage:
 
 @dataclass
 class StatusQueueMessage:
-    worker_uuid: str
-    task_uuid: None | str
+    worker_uuid: WorkerUUID
+    task_uuid: None | TaskUUID
     status: TaskStatus | WorkerStatus
     content: Any
     create_timestamp: float = field(default_factory=time.time)
@@ -176,7 +179,7 @@ class StatusQueueMessage:
 
 @dataclass
 class ControlQueueMessage:
-    worker_uuid: str
+    worker_uuid: WorkerUUID
     control_sig: TaskControl
     create_timestamp: float = field(default_factory=time.time)
 
@@ -190,55 +193,15 @@ class WorkerQueue:
 
 
 @dataclass
-class TaskInstance(Generic[_T]):
-    uuid: str
-    worker_uuid: str
-    _task_manager: 'FunTaskManager'
-
-    async def stop(
-            self
-    ):
-        await self._task_manager.stop_task(self.worker_uuid, self.uuid)
-
-
-@dataclass
 class StatusReport:
-    worker_uuid: str
-    task_uuid: str | None
+    worker_uuid: WorkerUUID
+    task_uuid: TaskUUID | None
     status: TaskStatus | WorkerStatus
     content: Any
     create_timestamp: float
 
 
 TaskInput = Tuple[FuncTask, List[str]] | None | FuncTask
-
-
-@dataclass
-class WorkerInstance:
-    uuid: str
-    _task_manager: 'FunTaskManager'
-
-    async def dispatch_fun_task(
-            self,
-            func_task: 'FuncTask',
-            *arguments,
-            **kwargs
-    ) -> 'TaskInstance[_T]':
-        return await self._task_manager.dispatch_fun_task(self.uuid, func_task, *arguments, **kwargs)
-
-    async def regenerate_state(
-            self,
-            state_generator: 'FuncTask'
-    ):
-        return await self._task_manager.generate_worker_state(self.uuid, state_generator)
-
-    async def stop(
-            self
-    ):
-        await self._task_manager.stop_worker(self.uuid)
-
-    async def kill(self):
-        await self._task_manager.kill_worker(self.uuid)
 
 
 class FunTaskManager:
@@ -248,7 +211,7 @@ class FunTaskManager:
             number: int = None,
             *args,
             **kwargs
-    ) -> List[WorkerInstance]:
+    ) -> List[WorkerUUID]:
         ...
 
     @abstractmethod
@@ -256,50 +219,50 @@ class FunTaskManager:
             self,
             *args,
             **kwargs
-    ) -> WorkerInstance:
+    ) -> WorkerUUID:
         ...
 
     @abstractmethod
     async def dispatch_fun_task(
             self,
-            worker_uuid: str,
+            worker_uuid: WorkerUUID,
             func_task: TaskInput,
             change_status=False,
             timeout=None,
             *arguments,
             **kwargs
-    ) -> TaskInstance[_T]:
+    ) -> Tuple[WorkerUUID, TaskUUID]:
         ...
 
     @abstractmethod
     async def generate_worker_state(
             self,
-            worker_uuid: str,
+            worker_uuid: WorkerUUID,
             state_generator: TaskInput,
             timeout=None,
             *arguments
-    ) -> TaskInstance[_T]:
+    ) -> TaskUUID:
         ...
 
     @abstractmethod
     async def stop_task(
             self,
-            worker_uuid: str,
-            task_uuid: str
+            worker_uuid: WorkerUUID,
+            task_uuid: TaskUUID
     ):
         ...
 
     @abstractmethod
     async def stop_worker(
             self,
-            worker_uuid: str
+            worker_uuid: WorkerUUID
     ):
         ...
 
     @abstractmethod
     async def kill_worker(
             self,
-            worker_uuid: str
+            worker_uuid: WorkerUUID
     ):
         ...
 

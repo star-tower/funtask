@@ -40,22 +40,22 @@ def manager() -> FunTaskManager:
 @pytest.mark.asyncio
 class TestMultiprocessing:
     async def test_worker_up_stop(self, manager: FunTaskManager):
-        workers = await manager.increase_workers(10)
-        [await worker.stop() for worker in workers]
+        workers_uuid = await manager.increase_workers(10)
+        [await manager.stop_worker(worker_uuid) for worker_uuid in workers_uuid]
 
     async def test_worker_up_kill(self, manager: FunTaskManager):
-        workers = await manager.increase_workers(10)
-        [await worker.kill() for worker in workers]
+        workers_uuid = await manager.increase_workers(10)
+        [await manager.kill_worker(worker_uuid) for worker_uuid in workers_uuid]
 
     async def test_task_exec(self, manager: FunTaskManager):
         def task(_, __):
             with open('task_done_flag', 'w'):
                 ...
 
-        worker = await manager.increase_worker()
-        await worker.dispatch_fun_task(task)
+        worker_uuid = await manager.increase_worker()
+        await manager.dispatch_fun_task(worker_uuid, task)
         await asyncio.sleep(1)
-        await worker.kill()
+        await manager.kill_worker(worker_uuid)
         assert 'task_done_flag' in os.listdir()
         os.remove('task_done_flag')
 
@@ -65,17 +65,19 @@ class TestMultiprocessing:
             with open(f'task_{task_id}_done_flag', 'w'):
                 ...
 
-        worker = await manager.increase_worker()
-        await worker.dispatch_fun_task(
+        worker_uuid = await manager.increase_worker()
+        await manager.dispatch_fun_task(
+            worker_uuid,
             (async_task, THIS_FILE_IMPORT_PATH),
             task_id=0
         )
-        await worker.dispatch_fun_task(
+        await manager.dispatch_fun_task(
+            worker_uuid,
             (async_task, THIS_FILE_IMPORT_PATH),
             task_id=1
         )
         await asyncio.sleep(4)
-        await worker.kill()
+        await manager.kill_worker(worker_uuid)
         assert os.path.exists('task_0_done_flag') and os.path.exists('task_1_done_flag')
         os.remove('task_0_done_flag')
         os.remove('task_1_done_flag')
@@ -88,12 +90,12 @@ class TestMultiprocessing:
             with open('status', 'w') as f:
                 f.write(str(status))
 
-        worker = await manager.increase_worker()
-        await worker.regenerate_state((set_status, THIS_FILE_IMPORT_PATH))
-        await worker.regenerate_state((set_status, THIS_FILE_IMPORT_PATH))
-        await worker.dispatch_fun_task(write_status_to_file)
+        worker_uuid = await manager.increase_worker()
+        await manager.generate_worker_state(worker_uuid, (set_status, THIS_FILE_IMPORT_PATH))
+        await manager.generate_worker_state(worker_uuid, (set_status, THIS_FILE_IMPORT_PATH))
+        await manager.dispatch_fun_task(worker_uuid, write_status_to_file)
         await asyncio.sleep(.1)
-        await worker.kill()
+        await manager.kill_worker(worker_uuid)
         with open('status') as f:
             assert f.read() == '3'
         os.remove('status')
@@ -108,11 +110,11 @@ class TestMultiprocessing:
             with open('task_dependency_done_flag', 'w'):
                 ...
 
-        worker = await manager.increase_worker()
-        await worker.regenerate_state((set_none_with_dependency, THIS_FILE_IMPORT_PATH))
-        await worker.dispatch_fun_task(still_can_use_sys)
+        worker_uuid = await manager.increase_worker()
+        await manager.generate_worker_state(worker_uuid, (set_none_with_dependency, THIS_FILE_IMPORT_PATH))
+        await manager.dispatch_fun_task(worker_uuid, still_can_use_sys)
         await asyncio.sleep(.1)
-        await worker.kill()
+        await manager.kill_worker(worker_uuid)
         assert os.path.exists('task_dependency_done_flag')
         os.remove('task_dependency_done_flag')
 
@@ -127,11 +129,11 @@ class TestMultiprocessing:
             with open('with_no_dependency', 'w'):
                 ...
 
-        worker = await manager.increase_worker()
-        await worker.dispatch_fun_task((can_use_sys_with_temp_dependency, THIS_FILE_IMPORT_PATH))
-        await worker.dispatch_fun_task(cannot_use_sys_with_no_temp_dependency)
+        worker_uuid = await manager.increase_worker()
+        await manager.dispatch_fun_task(worker_uuid, (can_use_sys_with_temp_dependency, THIS_FILE_IMPORT_PATH))
+        await manager.dispatch_fun_task(worker_uuid, cannot_use_sys_with_no_temp_dependency)
         await asyncio.sleep(.1)
-        await worker.kill()
+        await manager.kill_worker(worker_uuid)
         exist_no_sys_flag = os.path.exists('with_no_dependency')
         exist_sys_flag = os.path.exists('with_dependency')
         exist_sys_flag and os.remove('with_dependency')
@@ -147,23 +149,23 @@ class TestMultiprocessing:
         def err(_, __):
             raise Exception('just err')
 
-        worker = await manager.increase_worker()
-        task1 = await worker.dispatch_fun_task(sleep)
-        task2 = await worker.dispatch_fun_task(sleep)
-        task_err = await worker.dispatch_fun_task(err)
+        worker_uuid = await manager.increase_worker()
+        task1_uuid = await manager.dispatch_fun_task(worker_uuid, sleep)
+        task2_uuid = await manager.dispatch_fun_task(worker_uuid, sleep)
+        task_err_uuid = await manager.dispatch_fun_task(worker_uuid, err)
         await asyncio.sleep(.5)
         task_status_map: Dict[str, TaskStatus] = {}
         await get_status(manager, task_status_map)
-        assert task1.uuid in task_status_map
-        assert task2.uuid in task_status_map
-        assert task_status_map[task1.uuid] == TaskStatus.RUNNING
-        assert task_status_map[task2.uuid] == TaskStatus.QUEUED
+        assert task1_uuid in task_status_map
+        assert task2_uuid in task_status_map
+        assert task_status_map[task1_uuid] == TaskStatus.RUNNING
+        assert task_status_map[task2_uuid] == TaskStatus.QUEUED
         await asyncio.sleep(1)
         await get_status(manager, task_status_map)
-        assert task_status_map[task1.uuid] == TaskStatus.SUCCESS
-        assert task_status_map[task2.uuid] == TaskStatus.RUNNING
+        assert task_status_map[task1_uuid] == TaskStatus.SUCCESS
+        assert task_status_map[task2_uuid] == TaskStatus.RUNNING
         await asyncio.sleep(1)
         await get_status(manager, task_status_map)
-        await worker.kill()
-        assert task_status_map[task_err.uuid] == TaskStatus.ERROR
-        assert task_status_map[task2.uuid] == TaskStatus.SUCCESS
+        await manager.kill_worker(worker_uuid)
+        assert task_status_map[task_err_uuid] == TaskStatus.ERROR
+        assert task_status_map[task2_uuid] == TaskStatus.SUCCESS

@@ -1,11 +1,12 @@
 import threading
 import time
 import traceback
-from typing import Dict, Callable, TypeVar
+from typing import Dict, Callable, TypeVar, cast
 import asyncio
 
-from funtask.core.funtask_types.task_worker_manager import TaskStatus, Queue, TaskControl, Logger, LogLevel, WorkerStatus, \
-    TaskMeta, Task, BreakRef, TaskQueueMessage, StatusQueueMessage, WorkerQueue
+from funtask.core.funtask_types.task_worker_manager import TaskStatus, Queue, TaskControl, Logger, LogLevel, \
+    WorkerStatus, \
+    TaskMeta, Task, BreakRef, TaskQueueMessage, StatusQueueMessage, WorkerQueue, WorkerUUID
 from funtask.utils.killable import killable
 from funtask.utils.sandbox import UnsafeSandbox
 
@@ -54,7 +55,7 @@ class Worker:
                 control = await self.queue.control_queue.get(timeout=1)
                 if time.time() - last_heart_beat > 5:
                     await self.queue.status_queue.put(StatusQueueMessage(
-                        self.worker_uuid,
+                        cast(WorkerUUID, self.worker_uuid),
                         None,
                         WorkerStatus.HEARTBEAT,
                         None
@@ -67,7 +68,7 @@ class Worker:
                         if control.worker_uuid == self.worker_uuid:
                             self.stopped = True
                             await self.queue.status_queue.put(StatusQueueMessage(
-                                self.worker_uuid,
+                                cast(WorkerUUID, self.worker_uuid),
                                 None,
                                 TaskStatus.ERROR,
                                 Exception('worker stop signal')
@@ -91,7 +92,7 @@ class Worker:
                     self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
                 )
                 await self.queue.status_queue.put(
-                    StatusQueueMessage(self.worker_uuid, func_task.uuid, TaskStatus.SUCCESS, None)
+                    StatusQueueMessage(cast(WorkerUUID, self.worker_uuid), func_task.uuid, TaskStatus.SUCCESS, None)
                 )
             else:
                 result, _ = await self.sandbox.async_call_with(
@@ -100,11 +101,11 @@ class Worker:
                     self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
                 )
                 await self.queue.status_queue.put(
-                    StatusQueueMessage(self.worker_uuid, func_task.uuid, TaskStatus.SUCCESS, result)
+                    StatusQueueMessage(cast(WorkerUUID, self.worker_uuid), func_task.uuid, TaskStatus.SUCCESS, result)
                 )
         except Exception as e:
             task_meta and await self.queue.status_queue.put(
-                StatusQueueMessage(self.worker_uuid, func_task.uuid, TaskStatus.ERROR, e)
+                StatusQueueMessage(cast(WorkerUUID, self.worker_uuid), func_task.uuid, TaskStatus.ERROR, e)
             )
         finally:
             self.running_tasks.pop(func_task.uuid, None)
@@ -123,7 +124,7 @@ class Worker:
                         self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
                     )
                     await self.queue.status_queue.put(
-                        StatusQueueMessage(self.worker_uuid, func_task.uuid, TaskStatus.SUCCESS, None)
+                        StatusQueueMessage(cast(WorkerUUID, self.worker_uuid), func_task.uuid, TaskStatus.SUCCESS, None)
                     )
                 else:
                     result, _ = self.sandbox.call_with(
@@ -132,11 +133,13 @@ class Worker:
                         self.state, self.logger, *task_meta.arguments, **task_meta.kw_arguments
                     )
                     await self.queue.status_queue.put(
-                        StatusQueueMessage(self.worker_uuid, func_task.uuid, TaskStatus.SUCCESS, result)
+                        StatusQueueMessage(
+                            cast(WorkerUUID, self.worker_uuid), func_task.uuid, TaskStatus.SUCCESS, result
+                        )
                     )
         except Exception as e:
             task_meta and await self.queue.status_queue.put(
-                StatusQueueMessage(self.worker_uuid, func_task.uuid, TaskStatus.ERROR, e)
+                StatusQueueMessage(cast(WorkerUUID, self.worker_uuid), func_task.uuid, TaskStatus.ERROR, e)
             )
         finally:
             self.running_tasks.pop(func_task.uuid, None)
@@ -155,7 +158,7 @@ class Worker:
                 if self.stopped:
                     break
                 await self.queue.status_queue.put(
-                    StatusQueueMessage(self.worker_uuid, func_task.uuid, TaskStatus.RUNNING, None)
+                    StatusQueueMessage(cast(WorkerUUID, self.worker_uuid), func_task.uuid, TaskStatus.RUNNING, None)
                 )
                 if asyncio.iscoroutinefunction(func_task.task):
                     task = asyncio.create_task(self._async_task_caller(func_task, task_meta), name=func_task.uuid)
