@@ -1,6 +1,6 @@
 from typing import List
 
-from funtask.core.funtask_types import Logger, LogLevel
+from funtask.core.funtask_types.task_worker_manager import Logger, LogLevel
 
 
 class StdLogger(Logger):

@@ -1,4 +1,4 @@
-from funtask.core.funtask_types import BreakRef
+from funtask.core.funtask_types.task_worker_manager import BreakRef
 
 
 class NeverBreak(BreakRef):

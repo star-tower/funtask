@@ -4,7 +4,7 @@ import traceback
 from typing import Dict, Callable, TypeVar
 import asyncio
 
-from funtask.core.funtask_types import TaskStatus, Queue, TaskControl, Logger, LogLevel, WorkerStatus, \
+from funtask.core.funtask_types.task_worker_manager import TaskStatus, Queue, TaskControl, Logger, LogLevel, WorkerStatus, \
     TaskMeta, Task, BreakRef, TaskQueueMessage, StatusQueueMessage, WorkerQueue
 from funtask.utils.killable import killable
 from funtask.utils.sandbox import UnsafeSandbox

@@ -4,7 +4,7 @@ import time
 import dill
 
 from funtask import Queue
-from funtask.core.funtask_types import BreakRef, _T
+from funtask.core.funtask_types.task_worker_manager import BreakRef, _T
 from funtask.providers.queue.common import NeverBreak
 
 try:

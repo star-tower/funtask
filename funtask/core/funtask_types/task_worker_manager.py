@@ -187,3 +187,125 @@ class WorkerQueue:
     status_queue: Queue[StatusQueueMessage]
     control_queue: Queue[ControlQueueMessage]
     create_timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class TaskInstance(Generic[_T]):
+    uuid: str
+    worker_uuid: str
+    _task_manager: 'FunTaskManager'
+
+    async def stop(
+            self
+    ):
+        await self._task_manager.stop_task(self.worker_uuid, self.uuid)
+
+
+@dataclass
+class StatusReport:
+    worker_uuid: str
+    task_uuid: str | None
+    status: TaskStatus | WorkerStatus
+    content: Any
+    create_timestamp: float
+
+
+TaskInput = Tuple[FuncTask, List[str]] | None | FuncTask
+
+
+@dataclass
+class WorkerInstance:
+    uuid: str
+    _task_manager: 'FunTaskManager'
+
+    async def dispatch_fun_task(
+            self,
+            func_task: 'FuncTask',
+            *arguments,
+            **kwargs
+    ) -> 'TaskInstance[_T]':
+        return await self._task_manager.dispatch_fun_task(self.uuid, func_task, *arguments, **kwargs)
+
+    async def regenerate_state(
+            self,
+            state_generator: 'FuncTask'
+    ):
+        return await self._task_manager.generate_worker_state(self.uuid, state_generator)
+
+    async def stop(
+            self
+    ):
+        await self._task_manager.stop_worker(self.uuid)
+
+    async def kill(self):
+        await self._task_manager.kill_worker(self.uuid)
+
+
+class FunTaskManager:
+    @abstractmethod
+    async def increase_workers(
+            self,
+            number: int = None,
+            *args,
+            **kwargs
+    ) -> List[WorkerInstance]:
+        ...
+
+    @abstractmethod
+    async def increase_worker(
+            self,
+            *args,
+            **kwargs
+    ) -> WorkerInstance:
+        ...
+
+    @abstractmethod
+    async def dispatch_fun_task(
+            self,
+            worker_uuid: str,
+            func_task: TaskInput,
+            change_status=False,
+            timeout=None,
+            *arguments,
+            **kwargs
+    ) -> TaskInstance[_T]:
+        ...
+
+    @abstractmethod
+    async def generate_worker_state(
+            self,
+            worker_uuid: str,
+            state_generator: TaskInput,
+            timeout=None,
+            *arguments
+    ) -> TaskInstance[_T]:
+        ...
+
+    @abstractmethod
+    async def stop_task(
+            self,
+            worker_uuid: str,
+            task_uuid: str
+    ):
+        ...
+
+    @abstractmethod
+    async def stop_worker(
+            self,
+            worker_uuid: str
+    ):
+        ...
+
+    @abstractmethod
+    async def kill_worker(
+            self,
+            worker_uuid: str
+    ):
+        ...
+
+    @abstractmethod
+    async def get_queued_status(
+            self,
+            timeout: None | float = None
+    ) -> StatusReport | None:
+        ...

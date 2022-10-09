@@ -1,26 +1,11 @@
-from dataclasses import dataclass
 from uuid import uuid4 as uuid_generator
-from typing import List, TypeVar, Tuple, Generic, Any
+from typing import List, TypeVar, Tuple
 
-from funtask.core.funtask_types import FuncTask, TaskStatus, StatusQueueMessage, \
-    WorkerManager, Queue, TaskControl, Task, TaskMeta, WorkerStatus, ControlQueueMessage, TaskQueueMessage
+from funtask.core.funtask_types.task_worker_manager import FuncTask, TaskStatus, StatusQueueMessage, \
+    WorkerManager, Queue, TaskControl, Task, TaskMeta, ControlQueueMessage, TaskQueueMessage, TaskInput, \
+    WorkerInstance, TaskInstance, StatusReport, FunTaskManager as FunTaskManagerAbs
 
 _T = TypeVar('_T')
-
-
-@dataclass
-class TaskInstance(Generic[_T]):
-    uuid: str
-    worker_uuid: str
-    _task_manager: 'FunTaskManager'
-
-    async def stop(
-            self
-    ):
-        await self._task_manager.stop_task(self.worker_uuid, self.uuid)
-
-
-TaskInput = Tuple[FuncTask, List[str]] | None | FuncTask
 
 
 def _split_task_and_dependencies(
@@ -69,44 +54,7 @@ def _warp_to_trans_task(
     )
 
 
-@dataclass
-class StatusReport:
-    worker_uuid: str
-    task_uuid: str | None
-    status: TaskStatus | WorkerStatus
-    content: Any
-    create_timestamp: float
-
-
-@dataclass
-class WorkerInstance:
-    uuid: str
-    _task_manager: 'FunTaskManager'
-
-    async def dispatch_fun_task(
-            self,
-            func_task: 'FuncTask',
-            *arguments,
-            **kwargs
-    ) -> 'TaskInstance[_T]':
-        return await self._task_manager.dispatch_fun_task(self.uuid, func_task, *arguments, **kwargs)
-
-    async def regenerate_state(
-            self,
-            state_generator: 'FuncTask'
-    ):
-        return await self._task_manager.generate_worker_state(self.uuid, state_generator)
-
-    async def stop(
-            self
-    ):
-        await self._task_manager.stop_worker(self.uuid)
-
-    async def kill(self):
-        await self._task_manager.kill_worker(self.uuid)
-
-
-class FunTaskManager:
+class FunTaskManager(FunTaskManagerAbs):
     def __init__(
             self,
             *,

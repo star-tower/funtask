@@ -6,17 +6,18 @@ from funtask.dependency_container import DependencyContainer
 from loguru import logger
 
 logger.remove()
-logger.add(sys.stdout, format="<blue>{time:YYYY-MM-DD at HH:mm:ss}</blue> <green>{message}</green>", level="INFO", colorize=True)
+logger.add(
+    sys.stdout,
+    format="<blue>{time:YYYY-MM-DD at HH:mm:ss}</blue> <green>{message}</green>",
+    level="INFO",
+    colorize=True
+)
 
 
 class FormatException(Exception):
-    ...
-
-
-class Funtask:
     @staticmethod
     @logger.catch
-    async def task_worker_manager(config: str):
+    async def run(config: str):
         container = DependencyContainer()
         logger.info("loading config '{config}'", config=config)
         match config.split('.')[-1].lower():
@@ -33,6 +34,10 @@ class Funtask:
         ])
         rpc_service = container.task_worker_manager_service()
         await rpc_service.run()
+
+
+class Funtask:
+    task_worker_manager = FormatException()
 
 
 if __name__ == '__main__':

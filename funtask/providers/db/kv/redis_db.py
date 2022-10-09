@@ -1,6 +1,6 @@
 from typing import AsyncIterator
 
-from funtask.core.funtask_types import KVDB
+from funtask.core.funtask_types.task_worker_manager import KVDB
 
 try:
     import redis.asyncio as redis

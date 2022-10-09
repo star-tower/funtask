@@ -2,7 +2,7 @@ import asyncio
 import os
 from typing import Dict
 
-from funtask.core.funtask_types import Logger, TaskStatus
+from funtask.core.funtask_types.task_worker_manager import Logger, TaskStatus
 from funtask.core.task_worker_manager import FunTaskManager
 from funtask.providers.loggers.std import StdLogger
 from funtask.providers.queue.multiprocessing_queue import MultiprocessingQueue, MultiprocessingQueueFactory
