@@ -1,10 +1,11 @@
-from abc import abstractmethod
+from abc import abstractmethod, ABC
+from typing import NewType
+
+from funtask.core.funtask_types.task_worker_manager import FunTaskManager
+
+TaskGroupUUID = NewType("TaskGroupUUID", str)
+CronTaskUUID = NewType("CronTaskUUID", str)
 
 
-class Scheduler:
-    @abstractmethod
-    def create_worker(self) -> str:
-        """
-        create a worker, return it's uuid
-        """
-        ...
+class Scheduler(FunTaskManager, ABC):
+    ...
