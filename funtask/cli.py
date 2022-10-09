@@ -1,6 +1,12 @@
+import sys
+
 import fire as fire
 
 from funtask.dependency_container import DependencyContainer
+from loguru import logger
+
+logger.remove()
+logger.add(sys.stdout, format="<blue>{time:YYYY-MM-DD at HH:mm:ss}</blue> <green>{message}</green>", level="INFO", colorize=True)
 
 
 class FormatException(Exception):
@@ -9,8 +15,10 @@ class FormatException(Exception):
 
 class Funtask:
     @staticmethod
+    @logger.catch
     async def task_worker_manager(config: str):
         container = DependencyContainer()
+        logger.info("loading config '{config}'", config=config)
         match config.split('.')[-1].lower():
             case 'yaml' | 'yml':
                 container.config.from_yaml(config, required=True)
@@ -23,7 +31,8 @@ class Funtask:
         container.wire(modules=[
             'funtask.task_worker_manager.manager_service'
         ])
-        await container.task_worker_manager_service().run()
+        rpc_service = container.task_worker_manager_service()
+        await rpc_service.run()
 
 
 if __name__ == '__main__':

@@ -103,7 +103,6 @@ class Worker:
                     StatusQueueMessage(self.worker_uuid, func_task.uuid, TaskStatus.SUCCESS, result)
                 )
         except Exception as e:
-            print(e)
             task_meta and await self.queue.status_queue.put(
                 StatusQueueMessage(self.worker_uuid, func_task.uuid, TaskStatus.ERROR, e)
             )

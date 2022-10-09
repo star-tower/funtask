@@ -3,6 +3,8 @@ from typing import AsyncIterator
 import dill
 from dependency_injector.wiring import Provide, inject
 from grpclib.server import Server
+from loguru import logger
+
 from funtask.common.grpc import load_args, core_status2rpc_status
 from funtask.core.task_worker_manager import FunTaskManager
 from funtask.generated.manager import TaskWorkerManagerBase, IncreaseWorkerRequest, \
@@ -84,5 +86,11 @@ class ManagerServiceRunner:
         server = Server([ManagerService(
             self.fun_task_manager
         )])
+        logger.opt(colors=True).info(
+            "starting grpc service <cyan>{address}:{port}</cyan>",
+            address=self.address,
+            port=self.port
+        )
         await server.start(self.address, self.port)
+        logger.info("service start successful")
         await server.wait_closed()
