@@ -10,6 +10,10 @@ from funtask.core import entities
 from funtask.utils.enum_utils import AutoName
 
 
+class RecordNotFoundException(Exception):
+    ...
+
+
 class BreakRef:
     @abstractmethod
     def if_break_now(self) -> bool:
@@ -215,7 +219,7 @@ class FunTaskManager:
             timeout=None,
             *arguments,
             **kwargs
-    ) -> Tuple[entities.WorkerUUID, entities.TaskUUID]:
+    ) -> entities.TaskUUID:
         ...
 
     @abstractmethod
@@ -225,6 +229,62 @@ class FunTaskManager:
             state_generator: TaskInput,
             timeout=None,
             *arguments
+    ) -> entities.TaskUUID:
+        ...
+
+    @abstractmethod
+    async def stop_task(
+            self,
+            worker_uuid: entities.WorkerUUID,
+            task_uuid: entities.TaskUUID
+    ):
+        ...
+
+    @abstractmethod
+    async def stop_worker(
+            self,
+            worker_uuid: entities.WorkerUUID
+    ):
+        ...
+
+    @abstractmethod
+    async def kill_worker(
+            self,
+            worker_uuid: entities.WorkerUUID
+    ):
+        ...
+
+    @abstractmethod
+    async def get_queued_status(
+            self,
+            timeout: None | float = None
+    ) -> StatusReport | None:
+        ...
+
+
+class RPCFunTaskManager:
+    @abstractmethod
+    async def increase_workers(
+            self,
+            number: int = None
+    ) -> List[entities.WorkerUUID]:
+        ...
+
+    @abstractmethod
+    async def increase_worker(
+            self
+    ) -> entities.WorkerUUID:
+        ...
+
+    @abstractmethod
+    async def dispatch_fun_task(
+            self,
+            worker_uuid: entities.WorkerUUID,
+            func_task: bytes,
+            dependencies: List[str],
+            change_status: bool,
+            timeout: float,
+            argument: entities.FuncArgument
     ) -> entities.TaskUUID:
         ...
 
@@ -330,12 +390,77 @@ class Cron:
         ...
 
 
+class Repository:
+    async def get_task_from_uuid(
+            self,
+            task_uuid: entities.TaskUUID
+    ) -> entities.Task:
+        ...
+
+    async def get_cron_task_from_uuid(
+            self,
+            task_uuid: entities.CronTaskUUID
+    ) -> entities.CronTask:
+        ...
+
+    async def add_task(self, task: entities.Task) -> entities.TaskUUID:
+        ...
+
+    async def add_func_group(self, func_group: entities.FuncGroup) -> entities.FuncGroupUUID:
+        ...
+
+    async def add_func(self, func: entities.Func) -> entities.FuncUUID:
+        ...
+
+    async def add_cron_task(self, task: entities.CronTask) -> entities.TaskUUID:
+        ...
+
+    async def add_func_parameter_schema(
+            self,
+            func_parameter_schema: entities.FuncParameterSchema
+    ) -> entities.FuncParameterSchemaUUID:
+        ...
+
+    async def update_task_state(
+            self,
+            task_uuid: entities.TaskUUID,
+            task_status: entities.TaskStatus
+    ):
+        ...
+
+    async def update_task_uuid_in_manager(
+            self,
+            task_uuid: entities.TaskUUID,
+            task_uuid_in_manager: entities.TaskUUID
+    ):
+        ...
+
+    async def update_task(
+            self,
+            task_uuid: entities.TaskUUID,
+            value: Dict[str, Any]
+    ):
+        ...
+
+
 class Scheduler:
-    ...
+    @abstractmethod
+    async def assign_task(self, task_uuid: entities.TaskUUID):
+        ...
+
+    @abstractmethod
+    async def assign_cron_task(self, task_uuid: entities.CronTaskUUID):
+        ...
+
+    @abstractmethod
+    async def get_all_cron_task(self) -> List[entities.CronTaskUUID]:
+        ...
 
 
 class LeaderScheduler:
-    ...
+    @abstractmethod
+    async def scheduler_node_change(self, scheduler_nodes: List[SchedulerNode]):
+        ...
 
 
 class WebServer:
@@ -400,5 +525,6 @@ class WebServer:
         ...
 
     @abstractmethod
-    async def add_parameter_schema(self, parameter_schema: entities.FuncParameterSchema) -> entities.FuncSchemaUUID:
+    async def add_parameter_schema(self,
+                                   parameter_schema: entities.FuncParameterSchema) -> entities.FuncParameterSchemaUUID:
         ...

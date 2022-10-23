@@ -25,9 +25,10 @@ message IncreaseWorkersResponse {
 message DispatchFunTaskRequest {
   string worker_uuid = 1;
   bytes serialized_fun_task = 2;
-  bool change_status = 3;
-  optional float timeout = 4;
-  Args other_args = 5;
+  repeated string dependencies = 3;
+  bool change_status = 4;
+  optional float timeout = 5;
+  Args other_args = 6;
 }
 
 message DispatchFunTaskResponse {
