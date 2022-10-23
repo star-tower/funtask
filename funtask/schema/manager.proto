@@ -30,14 +30,6 @@ message DispatchFunTaskRequest {
   Args other_args = 5;
 }
 
-message Worker {
-  string uuid = 1;
-}
-
-message Task {
-  string uuid = 1;
-}
-
 message DispatchFunTaskResponse {
   Task task = 1;
 }
@@ -55,30 +47,9 @@ message KillWorkerRequest {
   string worker_uuid = 1;
 }
 
-message StatusReport {
-  string worker_uuid = 1;
-  optional string task_uuid = 2;
-  enum WorkerStatus {
-    HEARTBEAT = 0;
-  }
-  enum TaskStatus {
-    QUEUED = 0;
-    RUNNING = 1;
-    SUCCESS = 2;
-    ERROR = 3;
-  }
-  oneof status {
-    TaskStatus task_status = 4;
-    WorkerStatus worker_status = 5;
-  }
-  bytes serialized_content = 6;
-  float create_timestamp = 7;
-}
-
 message GetQueuedStatusResponse {
   StatusReport status_report = 1;
 }
-
 
 service TaskWorkerManager {
   rpc IncreaseWorkers(IncreaseWorkersRequest) returns (IncreaseWorkersResponse);

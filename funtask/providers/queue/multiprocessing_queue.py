@@ -6,7 +6,7 @@ from typing import Dict
 
 import dill
 
-from funtask.core.funtask_types.task_worker_manager import Queue, _T, BreakRef
+from funtask.core.interface_and_types import Queue, _T, BreakRef
 from funtask.providers.queue.common import NeverBreak
 
 

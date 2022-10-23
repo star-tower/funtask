@@ -6,7 +6,7 @@ from grpclib.server import Server
 from loguru import logger
 
 from funtask.common.grpc import load_args, core_status2rpc_status
-from funtask.core.funtask_types.task_worker_manager import WorkerUUID, TaskUUID
+from funtask.core.entities import WorkerUUID, TaskUUID
 from funtask.core.task_worker_manager import FunTaskManager
 from funtask.generated.manager import TaskWorkerManagerBase, IncreaseWorkerRequest, \
     IncreaseWorkersRequest, IncreaseWorkerResponse, IncreaseWorkersResponse, DispatchFunTaskResponse, \

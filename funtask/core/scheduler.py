@@ -1,5 +1,5 @@
-from funtask.core.funtask_types.task_worker_manager import FunTaskManager
-from funtask.core.funtask_types.scheduler import Scheduler as SchedulerAbs, LeaderScheduler as LeaderSchedulerAbs
+from funtask.core.interface_and_types import Scheduler as SchedulerAbs, FunTaskManager, \
+    LeaderScheduler as LeaderSchedulerAbs
 
 
 class Scheduler(SchedulerAbs):

@@ -1,25 +1,24 @@
 import asyncio
 import uuid
 
-from funtask.core.funtask_types.task_worker_manager import WorkerManager, Logger, QueueFactory, TaskQueueMessage, ControlQueueMessage
-from funtask import Queue
 from multiprocessing import Process
 import multiprocessing
 from typing import Dict
 
 from funtask.utils.namespace import with_namespace
-from funtask.core.worker import Worker, WorkerQueue
+from funtask.core.worker import Worker
+from funtask.core import interface_and_types as interface
 
 multiprocessing.set_start_method('fork')
 
 
-class MultiprocessingManager(WorkerManager):
+class MultiprocessingManager(interface.WorkerManager):
     def __init__(
             self,
-            logger: Logger,
-            task_queue_factory: QueueFactory,
-            control_queue_factory: QueueFactory,
-            task_status_queue: Queue
+            logger: interface.Logger,
+            task_queue_factory: interface.QueueFactory,
+            control_queue_factory: interface.QueueFactory,
+            task_status_queue: interface.Queue
     ):
         self.logger = logger
         # task_uuid -> (process, task_queue, control_queue)
@@ -34,7 +33,7 @@ class MultiprocessingManager(WorkerManager):
         worker_uuid = str(uuid.uuid4())
         task_queue = self.task_queue_factory(with_namespace('task_queue', worker_uuid))
         control_queue = self.control_queue_factory(with_namespace('control_queue', worker_uuid))
-        worker_runner = Worker(WorkerQueue(
+        worker_runner = Worker(interface.WorkerQueue(
             task_queue=task_queue,
             status_queue=self.task_status_queue,
             control_queue=control_queue,
@@ -50,10 +49,10 @@ class MultiprocessingManager(WorkerManager):
     async def stop_worker(self, worker_uuid: str):
         ...
 
-    async def get_task_queue(self, worker_uuid: str) -> 'Queue[TaskQueueMessage]':
+    async def get_task_queue(self, worker_uuid: str) -> 'interface.Queue[interface.TaskQueueMessage]':
         return self.task_queue_factory(with_namespace('task_queue', worker_uuid))
 
-    async def get_control_queue(self, worker_uuid: str) -> 'Queue[ControlQueueMessage]':
+    async def get_control_queue(self, worker_uuid: str) -> 'interface.Queue[interface.ControlQueueMessage]':
         return self.control_queue_factory(with_namespace('control_queue', worker_uuid))
 
     def __del__(self):
