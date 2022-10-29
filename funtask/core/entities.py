@@ -1,6 +1,6 @@
 import math
 from enum import unique, auto
-from typing import NewType, TypeVar, List, Any, Dict
+from typing import NewType, TypeVar, List, Any, Dict, Optional, Callable, Awaitable
 
 from pydantic.dataclasses import dataclass
 
@@ -25,18 +25,53 @@ FuncArgumentGroupUUID = NewType("FuncArgumentGroupUUID", str)
 @dataclass
 class Task:
     uuid: TaskUUID
-    uuid_in_manager: TaskUUID
+    parent_task: TaskUUID | CronTaskUUID | None
+    uuid_in_manager: TaskUUID | None
     status: 'TaskStatus'
-    worker_uuid: WorkerUUID
+    worker_uuid: WorkerUUID | None
     func: 'Func'
-    argument: 'FuncArgument'
+    argument: 'Optional[FuncArgument]'
     result_as_state: bool
     timeout: float
+    description: str
+    result: Any = None
+
+
+@dataclass
+class ArgumentQueue:
+    name: str
+    parameter_schema: 'FuncParameterSchema'
+
+
+@unique
+class ArgumentGenerateStrategy(AutoName):
+    STATIC = auto()
+    DROP = auto()
+    SKIP = auto()
+    FROM_QUEUE_END_REPEAT_LATEST = auto()
+    FROM_QUEUE_END_SKIP = auto()
+    FROM_QUEUE_END_DROP = auto()
+    UDF = auto()
+
+
+@dataclass
+class ArgumentStrategy:
+    strategy: ArgumentGenerateStrategy
+    static_value: 'Optional[FuncArgument]'
+    argument_queue: ArgumentQueue | None
+    udf: Callable[[Dict[str, Any]], Awaitable['ArgumentStrategy']] | None
 
 
 @dataclass
 class CronTask:
     uuid: CronTaskUUID
+    timepoints: List['TimePoint']
+    func: 'Func'
+    argument_generate_strategy: ArgumentStrategy
+    task_queue_strategy: 'QueueStrategy'
+    result_as_state: bool
+    timeout: float
+    description: str
 
 
 @dataclass
@@ -45,6 +80,7 @@ class Func:
     func: bytes
     dependencies: List[str]
     parameter_schema: 'FuncParameterSchema'
+    description: str
 
 
 @dataclass
@@ -69,21 +105,39 @@ class FuncParameterSchema:
     uuid: FuncParameterSchemaUUID
 
 
+@unique
+class TimeUnit(AutoName):
+    SECOND = auto()
+    MINUTE = auto()
+    HOUR = auto()
+    DAY = auto()
+    WEEK = auto()
+    MILLISECOND = auto()
+
+
 @dataclass
-class TimePoints:
-    ...
+class TimePoint:
+    unit: TimeUnit
+    n: int
+    at: str | None
+
+    def __str__(self):
+        return f"{self.n}/{self.unit}" + f"/{self.at}" if self.at is not None else ""
 
 
 @unique
-class QueueFullBehavior(AutoName):
+class QueueFullStrategy(AutoName):
+    SKIP = auto()
     DROP = auto()
     SEIZE = auto()
+    UDF = auto()
 
 
 @dataclass
-class QueueBehavior:
+class QueueStrategy:
     max_size = math.inf
-    full_behavior: QueueFullBehavior
+    full_strategy: QueueFullStrategy
+    udf: Callable[[Dict[str, Any]], Awaitable['QueueStrategy']] | None
 
 
 _T = TypeVar('_T')
@@ -92,6 +146,8 @@ _T = TypeVar('_T')
 @unique
 class TaskStatus(AutoName):
     UNSCHEDULED = auto()
+    SCHEDULED = auto()
+    SKIP = auto()
     QUEUED = auto()
     RUNNING = auto()
     SUCCESS = auto()

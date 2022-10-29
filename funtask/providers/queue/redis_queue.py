@@ -1,10 +1,11 @@
 import asyncio
 import time
+from typing import TypeVar
 
 import dill
 
 from funtask import Queue
-from funtask.core.funtask_types.task_worker_manager import BreakRef, _T
+from funtask.core.interface_and_types import BreakRef
 from funtask.providers.queue.common import NeverBreak
 
 try:
@@ -14,11 +15,16 @@ except ImportError:
         "to use redis kv-db, please make sure install redis~=4.3.4 or install with funtask[redis] feature"
     )
 
+_T = TypeVar('_T')
+
 
 class RedisQueue(Queue):
     def __init__(self, queue_id: str, *args, **kwargs):
         self.r = redis.Redis(*args, **kwargs)
         self.qid = queue_id
+
+    async def get_front(self) -> _T | None:
+        raise NotImplemented()
 
     @staticmethod
     def from_url(queue_id: str, url: str) -> 'RedisQueue':

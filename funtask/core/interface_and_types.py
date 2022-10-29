@@ -14,6 +14,10 @@ class RecordNotFoundException(Exception):
     ...
 
 
+class EmptyQueueException(Exception):
+    ...
+
+
 class BreakRef:
     @abstractmethod
     def if_break_now(self) -> bool:
@@ -65,6 +69,14 @@ class Queue(Generic[_T]):
     async def get(self, timeout: None | float = None) -> _T:
         """
         timeout will return None
+        """
+        ...
+
+    @abstractmethod
+    async def get_front(self) -> _T | None:
+        """
+        get first element of queue, if queue is empty, raise an EmptyQueueException
+        :return:
         """
         ...
 
@@ -382,6 +394,10 @@ class Cron:
         ...
 
     @abstractmethod
+    async def every_n_millisecond(self, name: str, n: int, task: Callable, *args, **kwargs):
+        ...
+
+    @abstractmethod
     async def cancel(self, name: str):
         ...
 
@@ -404,6 +420,9 @@ class Repository:
         ...
 
     async def add_task(self, task: entities.Task) -> entities.TaskUUID:
+        ...
+
+    async def change_task_status(self, task_uuid: entities.TaskUUID, status: entities.TaskStatus):
         ...
 
     async def add_func_group(self, func_group: entities.FuncGroup) -> entities.FuncGroupUUID:
@@ -505,7 +524,7 @@ class WebServer:
     @abstractmethod
     async def trigger_repeated_func(
             self,
-            time_points: entities.TimePoints,
+            time_points: entities.TimePoint,
             func: entities.Func,
             argument: entities.FuncArgument
     ) -> entities.CronTaskUUID:
@@ -514,7 +533,7 @@ class WebServer:
     @abstractmethod
     async def trigger_repeated_func_group(
             self,
-            time_points: entities.TimePoints,
+            time_points: entities.TimePoint,
             func_group: entities.FuncGroup,
             argument_group: entities.FuncArgumentGroup
     ) -> entities.CronTaskUUID:
@@ -525,6 +544,8 @@ class WebServer:
         ...
 
     @abstractmethod
-    async def add_parameter_schema(self,
-                                   parameter_schema: entities.FuncParameterSchema) -> entities.FuncParameterSchemaUUID:
+    async def add_parameter_schema(
+            self,
+            parameter_schema: entities.FuncParameterSchema
+    ) -> entities.FuncParameterSchemaUUID:
         ...
