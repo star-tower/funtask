@@ -60,6 +60,25 @@ class ArgumentStrategy:
     static_value: 'Optional[FuncArgument]'
     argument_queue: ArgumentQueue | None
     udf: Callable[[Dict[str, Any]], Awaitable['ArgumentStrategy']] | None
+    udf_extra: Dict[str, Any] | None
+
+
+@unique
+class WorkerChooseStrategy(AutoName):
+    STATIC = auto()
+    RANDOM_FROM_LIST = auto()
+    RANDOM_FROM_WORKER_TAGS = auto()
+    UDF = auto()
+
+
+@dataclass
+class WorkerStrategy:
+    strategy: WorkerChooseStrategy
+    static_worker: Optional[WorkerUUID]
+    workers: Optional[List[WorkerUUID]]
+    worker_tags: Optional[List[str]]
+    udf: Callable[[Dict[str, Any]], Awaitable['WorkerStrategy']] | None
+    udf_extra: Dict[str, Any] | None
 
 
 @dataclass
@@ -68,6 +87,7 @@ class CronTask:
     timepoints: List['TimePoint']
     func: 'Func'
     argument_generate_strategy: ArgumentStrategy
+    worker_choose_strategy: WorkerStrategy
     task_queue_strategy: 'QueueStrategy'
     result_as_state: bool
     timeout: float
@@ -138,6 +158,7 @@ class QueueStrategy:
     max_size = math.inf
     full_strategy: QueueFullStrategy
     udf: Callable[[Dict[str, Any]], Awaitable['QueueStrategy']] | None
+    udf_extra: Dict[str, Any] | None
 
 
 _T = TypeVar('_T')
@@ -158,3 +179,8 @@ class TaskStatus(AutoName):
 @unique
 class WorkerStatus(AutoName):
     HEARTBEAT = auto()
+
+
+@dataclass
+class Worker:
+    uuid: WorkerUUID

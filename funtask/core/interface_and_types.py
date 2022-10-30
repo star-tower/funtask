@@ -1,8 +1,9 @@
 from abc import abstractmethod
+from contextlib import contextmanager
 from dataclasses import field
 import time
 from enum import unique, auto
-from typing import Callable, List, Generic, TypeVar, Dict, AsyncIterator, Tuple, Any, Awaitable
+from typing import Callable, List, Generic, TypeVar, Dict, AsyncIterator, Tuple, Any, Awaitable, Generator
 
 from mypy_extensions import VarArg
 from dataclasses import dataclass
@@ -329,6 +330,10 @@ class RPCFunTaskManager:
     ) -> StatusReport | None:
         ...
 
+    @abstractmethod
+    async def get_task_queue_size(self, worker: entities.WorkerUUID) -> int:
+        ...
+
 
 class SchedulerNode:
     uuid: entities.SchedulerNodeUUID
@@ -461,10 +466,25 @@ class Repository:
     ):
         ...
 
+    async def get_workers_from_tags(
+            self,
+            tags: List[str]
+    ) -> List[entities.Worker]:
+        ...
+
 
 class Scheduler:
     @abstractmethod
     async def assign_task(self, task_uuid: entities.TaskUUID):
+        ...
+
+    @abstractmethod
+    async def remove_cron_task(self, task_uuid: entities.CronTaskUUID) -> bool:
+        """
+        remove a task from scheduler, return if remove success
+        :param task_uuid: task uuid
+        :return:
+        """
         ...
 
     @abstractmethod
@@ -549,3 +569,27 @@ class WebServer:
             parameter_schema: entities.FuncParameterSchema
     ) -> entities.FuncParameterSchemaUUID:
         ...
+
+
+class TimeoutException(Exception):
+    ...
+
+
+class DistributeLock:
+    @contextmanager
+    async def lock(self, name: str, timeout: float = None) -> Generator[None, None, None]:
+        """
+        lock a value, if timeout raise a TimeoutException, default no timeout
+        :param name: global lock name
+        :param timeout: timeout
+        :return
+        """
+        ...
+
+    @contextmanager
+    async def try_lock(self, name: str) -> Generator[bool, None, None]:
+        """
+        try to get a lock, if lock occupied yield false
+        :param name: global lock name
+        :return:
+        """
