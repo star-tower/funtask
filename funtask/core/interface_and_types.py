@@ -348,11 +348,11 @@ class SchedulerNode:
 
 class LeaderControl:
     @abstractmethod
-    async def get_leader(self) -> SchedulerNode:
+    async def get_leader(self) -> SchedulerNode | None:
         ...
 
     @abstractmethod
-    async def elect_leader(self) -> bool:
+    async def elect_leader(self, uuid: entities.SchedulerNodeUUID) -> bool:
         ...
 
     @abstractmethod
@@ -370,7 +370,12 @@ class LeaderControl:
 
 class LeaderSchedulerRPC:
     @abstractmethod
-    async def assign_task_to_node(self, node: SchedulerNode, cron_task_uuid: entities.CronTaskUUID):
+    async def assign_task_to_node(
+            self,
+            node: SchedulerNode,
+            cron_task_uuid: entities.CronTaskUUID,
+            start_time: datetime = None
+    ):
         ...
 
     @abstractmethod
@@ -378,7 +383,16 @@ class LeaderSchedulerRPC:
         ...
 
     @abstractmethod
-    async def remove_task_from_node(self, node: SchedulerNode, cron_task_uuid: entities.CronTaskUUID):
+    async def remove_task_from_node(
+            self,
+            node: SchedulerNode,
+            cron_task_uuid: entities.CronTaskUUID,
+            start_time: datetime = None
+    ):
+        ...
+
+    @abstractmethod
+    async def get_all_nodes(self) -> List[SchedulerNode]:
         ...
 
 
@@ -427,6 +441,9 @@ class Repository:
             self,
             task_uuid: entities.CronTaskUUID
     ) -> entities.CronTask:
+        ...
+
+    async def get_all_cron_task(self) -> List[entities.CronTask]:
         ...
 
     async def add_task(self, task: entities.Task) -> entities.TaskUUID:
@@ -513,6 +530,10 @@ class Scheduler:
 class LeaderScheduler:
     @abstractmethod
     async def scheduler_node_change(self, scheduler_nodes: List[SchedulerNode]):
+        ...
+
+    @abstractmethod
+    async def rebalance(self, rebalance_date: datetime):
         ...
 
 

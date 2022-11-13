@@ -1,7 +1,9 @@
+import asyncio
 import random
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, cast
+from pydantic.dataclasses import dataclass
 
 from funtask.core import interface_and_types as interface
 from funtask.core.interface_and_types import SchedulerNode, entities, RecordNotFoundException, StatusReport
@@ -20,7 +22,7 @@ def _filter_task_uuid_from_names(names: List[str], task_uuid: entities.CronTaskU
     return [name for name in names if name.startswith(task_uuid)]
 
 
-class Scheduler(interface.Scheduler):
+class WorkerScheduler(interface.Scheduler):
     def __init__(
             self,
             funtask_manager: interface.RPCFunTaskManager,
@@ -355,8 +357,48 @@ class Scheduler(interface.Scheduler):
         cron_task = await self.repository.get_cron_task_from_uuid(task_uuid)
         for time_point in cron_task.timepoints:
             match time_point.unit:
+                case entities.TimeUnit.WEEK:
+                    await self.cron.every_n_weeks(
+                        _task_with_point2name(cron_task, time_point),
+                        time_point.n,
+                        self._create_cron_sub_task,
+                        time_point.at,
+                        cron_task
+                    )
                 case entities.TimeUnit.DAY:
                     await self.cron.every_n_days(
+                        _task_with_point2name(cron_task, time_point),
+                        time_point.n,
+                        self._create_cron_sub_task,
+                        time_point.at,
+                        cron_task
+                    )
+                case entities.TimeUnit.HOUR:
+                    await self.cron.every_n_hours(
+                        _task_with_point2name(cron_task, time_point),
+                        time_point.n,
+                        self._create_cron_sub_task,
+                        time_point.at,
+                        cron_task
+                    )
+                case entities.TimeUnit.MINUTE:
+                    await self.cron.every_n_minutes(
+                        _task_with_point2name(cron_task, time_point),
+                        time_point.n,
+                        self._create_cron_sub_task,
+                        time_point.at,
+                        cron_task
+                    )
+                case entities.TimeUnit.SECOND:
+                    await self.cron.every_n_seconds(
+                        _task_with_point2name(cron_task, time_point),
+                        time_point.n,
+                        self._create_cron_sub_task,
+                        time_point.at,
+                        cron_task
+                    )
+                case entities.TimeUnit.MILLISECOND:
+                    await self.cron.every_n_millisecond(
                         _task_with_point2name(cron_task, time_point),
                         time_point.n,
                         self._create_cron_sub_task,
@@ -370,5 +412,106 @@ class Scheduler(interface.Scheduler):
 
 
 class LeaderScheduler(interface.LeaderScheduler):
+    def __init__(self, scheduler_rpc: interface.LeaderSchedulerRPC, repository: interface.Repository):
+        self.scheduler_rpc: interface.LeaderSchedulerRPC = scheduler_rpc
+        self.nodes = await self.scheduler_rpc.get_all_nodes()
+        self.node_responsible_tasks_dict = await self._get_all_node_responsible_tasks(self.nodes)
+        self.repository = repository
+
+    async def _get_all_node_responsible_tasks(
+            self,
+            nodes: List[SchedulerNode]
+    ) -> Dict[SchedulerNode, List[entities.CronTaskUUID]]:
+        return {
+            node: await self.scheduler_rpc.get_node_task_list(node) for node in nodes
+        }
+
     async def scheduler_node_change(self, scheduler_nodes: List[SchedulerNode]):
-        pass
+        current_node_responsible_tasks_dict = await self._get_all_node_responsible_tasks(scheduler_nodes)
+        all_tasks = set(task.uuid for task in await self.repository.get_all_cron_task())
+        covered_task = set(sum(current_node_responsible_tasks_dict.values(), []))
+        not_assigned_task_uuids = all_tasks - covered_task
+        # give down node's task to other
+        for task_uuid in not_assigned_task_uuids:
+            await self.scheduler_rpc.assign_task_to_node(
+                random.choice(scheduler_nodes),
+                task_uuid
+            )
+        self.node_responsible_tasks_dict = current_node_responsible_tasks_dict
+
+    async def rebalance(self, rebalance_date: datetime):
+        for node, tasks in self.node_responsible_tasks_dict.items():
+            for task_uuid in tasks:
+                await self.scheduler_rpc.remove_task_from_node(node, task_uuid, rebalance_date)
+                await self.scheduler_rpc.assign_task_to_node(
+                    random.choice(self.nodes),
+                    task_uuid,
+                    rebalance_date
+                )
+
+
+@dataclass
+class LeaderSchedulerConfig:
+    rebalanced_frequency: timedelta
+
+
+@dataclass
+class WorkerSchedulerConfig:
+    ...
+
+
+@dataclass
+class SchedulerConfig:
+    leader_scheduler: LeaderSchedulerConfig
+    worker_scheduler: WorkerSchedulerConfig
+
+
+class Scheduler:
+    def __init__(
+            self,
+            self_node: SchedulerNode,
+            funtask_manager: interface.RPCFunTaskManager,
+            repository: interface.Repository,
+            cron: interface.Cron,
+            argument_queue_factory: interface.QueueFactory,
+            lock: interface.DistributeLock,
+            leader_scheduler_rpc: interface.LeaderSchedulerRPC,
+            leader_control: interface.LeaderControl,
+            scheduler_config: SchedulerConfig,
+            task_manager_rpc: interface.RPCFunTaskManager
+    ):
+        self.scheduler_config = scheduler_config
+        self.self_node = self_node
+        self.leader_control = leader_control
+        self.leader_scheduler = LeaderScheduler(
+            scheduler_rpc=leader_scheduler_rpc,
+            repository=repository
+        )
+        self.task_manager_rpc = task_manager_rpc
+        self.worker_scheduler = WorkerScheduler(
+            funtask_manager=funtask_manager,
+            repository=repository,
+            cron=cron,
+            argument_queue_factory=argument_queue_factory,
+            lock=lock
+        )
+
+    async def run(self):
+        leader_last_rebalanced_time = datetime.now()
+        while True:
+            leader = await self.leader_control.get_leader()
+            if leader is not None and leader.uuid == self.self_node.uuid:
+                # if is leader scheduler and worker schedulers need rebalance
+                if datetime.now() - leader_last_rebalanced_time > self.scheduler_config.leader_scheduler. \
+                        rebalanced_frequency:
+                    leader_last_rebalanced_time = datetime.now()
+                    await self.leader_scheduler.rebalance(
+                        leader_last_rebalanced_time + self.scheduler_config.leader_scheduler.rebalanced_frequency / 2
+                    )
+                # is worker scheduler
+                else:
+                    status_report = await self.task_manager_rpc.get_queued_status()
+                    await self.worker_scheduler.process_new_status(status_report)
+            else:
+                await self.leader_control.elect_leader(self.self_node.uuid)
+            await asyncio.sleep(.1)

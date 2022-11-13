@@ -92,6 +92,7 @@ class CronTask:
     result_as_state: bool
     timeout: float
     description: str
+    disabled: bool
 
 
 @dataclass
