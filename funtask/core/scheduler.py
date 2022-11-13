@@ -1,9 +1,10 @@
 import random
 import uuid
+from datetime import datetime
 from typing import List, Dict, Any, cast
 
 from funtask.core import interface_and_types as interface
-from funtask.core.interface_and_types import SchedulerNode, entities, RecordNotFoundException
+from funtask.core.interface_and_types import SchedulerNode, entities, RecordNotFoundException, StatusReport
 from dataclasses import asdict
 
 
@@ -34,6 +35,36 @@ class Scheduler(interface.Scheduler):
         self.cron = cron
         self.argument_queue_factory = argument_queue_factory
         self.lock = lock
+
+    async def process_new_status(self, status_report: StatusReport):
+        if isinstance(status_report.status, entities.TaskStatus):
+            task = await self.repository.get_task_from_uuid(
+                status_report.task_uuid
+            )
+            # validate status change
+            if task.status in (
+                    entities.TaskStatus.SKIP, entities.TaskStatus.ERROR, entities.TaskStatus.SUCCESS,
+                    entities.TaskStatus.DIED
+            ):
+                if status_report.status in (entities.TaskStatus.SCHEDULED, entities.TaskStatus.UNSCHEDULED,
+                                            entities.TaskStatus.RUNNING, entities.TaskStatus.QUEUED):
+                    raise interface.StatusChangeException(
+                        f"can't change status from {task.status} to {task.status}"
+                    )
+            await self.repository.change_task_status(task_uuid=status_report.task_uuid, status=status_report.status)
+        elif isinstance(status_report.status, entities.WorkerStatus):
+            assert status_report.worker_uuid is not None, ValueError(
+                "worker uuid should not be none, when status type is WorkerStatus, please report this bug"
+            )
+            worker = await self.repository.get_worker_from_uuid(
+                status_report.worker_uuid
+            )
+            # validate status change
+            if worker.status is not entities.WorkerStatus.RUNNING:
+                raise interface.StatusChangeException(
+                    f"worker {worker.uuid} status is {worker.status}, but still heart beat"
+                )
+            await self.repository.update_worker_last_heart_beat_time(status_report.worker_uuid, datetime.now())
 
     async def assign_task(self, task_uuid: entities.TaskUUID):
         task = await self.repository.get_task_from_uuid(task_uuid)

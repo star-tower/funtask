@@ -179,6 +179,9 @@ class TaskStatus(AutoName):
 @unique
 class WorkerStatus(AutoName):
     HEARTBEAT = auto()
+    RUNNING = auto()
+    STOPPED = auto()
+    DIED = auto()
 
 
 @dataclass

@@ -2,6 +2,7 @@ from abc import abstractmethod
 from contextlib import contextmanager
 from dataclasses import field
 import time
+from datetime import datetime
 from enum import unique, auto
 from typing import Callable, List, Generic, TypeVar, Dict, AsyncIterator, Tuple, Any, Awaitable, Generator
 
@@ -16,6 +17,10 @@ class RecordNotFoundException(Exception):
 
 
 class EmptyQueueException(Exception):
+    ...
+
+
+class StatusChangeException(Exception):
     ...
 
 
@@ -436,6 +441,15 @@ class Repository:
     async def add_func(self, func: entities.Func) -> entities.FuncUUID:
         ...
 
+    async def add_worker(self, worker: entities.Worker) -> entities.WorkerUUID:
+        ...
+
+    async def get_worker_from_uuid(self, task_uuid: entities.WorkerUUID) -> entities.Task:
+        ...
+
+    async def change_worker_status(self, worker_uuid: entities.WorkerUUID, status: entities.WorkerStatus):
+        ...
+
     async def add_cron_task(self, task: entities.CronTask) -> entities.TaskUUID:
         ...
 
@@ -443,13 +457,6 @@ class Repository:
             self,
             func_parameter_schema: entities.FuncParameterSchema
     ) -> entities.FuncParameterSchemaUUID:
-        ...
-
-    async def update_task_state(
-            self,
-            task_uuid: entities.TaskUUID,
-            task_status: entities.TaskStatus
-    ):
         ...
 
     async def update_task_uuid_in_manager(
@@ -464,6 +471,9 @@ class Repository:
             task_uuid: entities.TaskUUID,
             value: Dict[str, Any]
     ):
+        ...
+
+    async def update_worker_last_heart_beat_time(self, worker_uuid: entities.WorkerUUID, t: datetime):
         ...
 
     async def get_workers_from_tags(
@@ -493,6 +503,10 @@ class Scheduler:
 
     @abstractmethod
     async def get_all_cron_task(self) -> List[entities.CronTaskUUID]:
+        ...
+
+    @abstractmethod
+    async def process_new_status(self, status_report: StatusReport):
         ...
 
 
