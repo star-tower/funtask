@@ -173,7 +173,8 @@ class TaskQueueMessage:
 class StatusQueueMessage:
     worker_uuid: entities.WorkerUUID
     task_uuid: None | entities.TaskUUID
-    status: entities.TaskStatus | entities.WorkerStatus
+    # status is None means this is a worker heart beat
+    status: entities.TaskStatus | entities.WorkerStatus | None
     content: Any
     create_timestamp: float = field(default_factory=time.time)
 
@@ -430,72 +431,103 @@ class Cron:
         ...
 
 
+class RollbackException(Exception):
+    ...
+
+
 class Repository:
+    @abstractmethod
+    async def session_ctx(self):
+        """
+        should be context manager \n
+        e.g. `with session_ctx() as session: `\n
+        if ctx yield RollbackException, should rollback
+        """
+        ...
+
+    @abstractmethod
     async def get_task_from_uuid(
             self,
-            task_uuid: entities.TaskUUID
+            task_uuid: entities.TaskUUID,
+            session=None
     ) -> entities.Task:
         ...
 
+    @abstractmethod
     async def get_cron_task_from_uuid(
             self,
-            task_uuid: entities.CronTaskUUID
+            task_uuid: entities.CronTaskUUID,
+            session=None
     ) -> entities.CronTask:
         ...
 
-    async def get_all_cron_task(self) -> List[entities.CronTask]:
+    @abstractmethod
+    async def get_all_cron_task(self, session=None) -> List[entities.CronTask]:
         ...
 
-    async def add_task(self, task: entities.Task) -> entities.TaskUUID:
+    @abstractmethod
+    async def add_task(self, task: entities.Task, session=None) -> entities.TaskUUID:
         ...
 
-    async def change_task_status(self, task_uuid: entities.TaskUUID, status: entities.TaskStatus):
+    @abstractmethod
+    async def change_task_status(self, task_uuid: entities.TaskUUID, status: entities.TaskStatus, session=None):
         ...
 
-    async def add_func_group(self, func_group: entities.FuncGroup) -> entities.FuncGroupUUID:
+    @abstractmethod
+    async def add_func(self, func: entities.Func, session=None) -> entities.FuncUUID:
         ...
 
-    async def add_func(self, func: entities.Func) -> entities.FuncUUID:
+    @abstractmethod
+    async def add_worker(self, worker: entities.Worker, session=None) -> entities.WorkerUUID:
         ...
 
-    async def add_worker(self, worker: entities.Worker) -> entities.WorkerUUID:
+    @abstractmethod
+    async def get_worker_from_uuid(self, task_uuid: entities.WorkerUUID, session=None) -> entities.Task:
         ...
 
-    async def get_worker_from_uuid(self, task_uuid: entities.WorkerUUID) -> entities.Task:
+    @abstractmethod
+    async def change_worker_status(self, worker_uuid: entities.WorkerUUID, status: entities.WorkerStatus, session=None):
         ...
 
-    async def change_worker_status(self, worker_uuid: entities.WorkerUUID, status: entities.WorkerStatus):
+    @abstractmethod
+    async def add_cron_task(self, task: entities.CronTask, session=None) -> entities.TaskUUID:
         ...
 
-    async def add_cron_task(self, task: entities.CronTask) -> entities.TaskUUID:
-        ...
-
+    @abstractmethod
     async def add_func_parameter_schema(
             self,
-            func_parameter_schema: entities.FuncParameterSchema
+            func_parameter_schema: entities.FuncParameterSchema,
+            session=None
     ) -> entities.FuncParameterSchemaUUID:
         ...
 
+    @abstractmethod
     async def update_task_uuid_in_manager(
             self,
             task_uuid: entities.TaskUUID,
-            task_uuid_in_manager: entities.TaskUUID
+            task_uuid_in_manager: entities.TaskUUID,
+            session=None
     ):
         ...
 
+    @abstractmethod
     async def update_task(
             self,
             task_uuid: entities.TaskUUID,
-            value: Dict[str, Any]
+            value: Dict[str, Any],
+            session=None
     ):
         ...
 
-    async def update_worker_last_heart_beat_time(self, worker_uuid: entities.WorkerUUID, t: datetime):
+    @abstractmethod
+    async def update_worker_last_heart_beat_time(self, worker_uuid: entities.WorkerUUID, t: datetime, session=None):
         ...
 
+    @abstractmethod
     async def get_workers_from_tags(
             self,
-            tags: List[str]
+            tags: List[str],
+            session=None
     ) -> List[entities.Worker]:
         ...
 

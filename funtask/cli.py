@@ -15,6 +15,10 @@ logger.add(
 
 
 class FormatException(Exception):
+    ...
+
+
+class TaskWorkerManager:
     @staticmethod
     @logger.catch
     async def run(config: str):
@@ -37,7 +41,7 @@ class FormatException(Exception):
 
 
 class Funtask:
-    task_worker_manager = FormatException()
+    task_worker_manager = TaskWorkerManager()
 
 
 if __name__ == '__main__':

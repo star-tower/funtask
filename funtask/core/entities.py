@@ -1,4 +1,5 @@
 import math
+from dataclasses import field
 from enum import unique, auto
 from typing import NewType, TypeVar, List, Any, Dict, Optional, Callable, Awaitable
 
@@ -35,6 +36,9 @@ class Task:
     timeout: float
     description: str
     result: Any = None
+    func_uuid: FuncUUID | None = None
+    func_name: str | None = None
+    name: str | None = None
 
 
 @dataclass
@@ -60,6 +64,7 @@ class ArgumentStrategy:
     static_value: 'Optional[FuncArgument]'
     argument_queue: ArgumentQueue | None
     udf: Callable[[Dict[str, Any]], Awaitable['ArgumentStrategy']] | None
+    # part of udf arguments
     udf_extra: Dict[str, Any] | None
 
 
@@ -93,6 +98,10 @@ class CronTask:
     timeout: float
     description: str
     disabled: bool
+    func_uuid: FuncUUID | None = None
+    func_name: str | None = None
+    name: str | None = None
+    tags: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -100,8 +109,9 @@ class Func:
     uuid: FuncUUID
     func: bytes
     dependencies: List[str]
-    parameter_schema: 'FuncParameterSchema'
+    parameter_schema: 'Optional[FuncParameterSchema]'
     description: str
+    tags: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -179,8 +189,8 @@ class TaskStatus(AutoName):
 
 @unique
 class WorkerStatus(AutoName):
-    HEARTBEAT = auto()
     RUNNING = auto()
+    STOPPING = auto()
     STOPPED = auto()
     DIED = auto()
 
@@ -188,3 +198,6 @@ class WorkerStatus(AutoName):
 @dataclass
 class Worker:
     uuid: WorkerUUID
+    status: WorkerStatus
+    name: str | None = None
+    tags: List[str] = field(default_factory=list)

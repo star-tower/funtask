@@ -54,10 +54,11 @@ class Worker:
             try:
                 control = await self.queue.control_queue.get(timeout=1)
                 if time.time() - last_heart_beat > 5:
+                    # heart beat status is None
                     await self.queue.status_queue.put(interface.StatusQueueMessage(
                         cast(entities.WorkerUUID, self.worker_uuid),
                         None,
-                        entities.WorkerStatus.HEARTBEAT,
+                        None,
                         None
                     ))
                     last_heart_beat = time.time()
