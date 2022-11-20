@@ -1,5 +1,5 @@
 import sys
-from types import FunctionType, CoroutineType
+from types import FunctionType
 from typing import Dict, List, Any, Tuple
 import importlib
 

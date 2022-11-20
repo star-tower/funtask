@@ -449,7 +449,7 @@ class Repository:
         """
         should be context manager \n
         e.g. `with session_ctx() as session: `\n
-        if ctx yield RollbackException, should rollback
+        if ctx yield RollbackException, should roll back
         """
         ...
 
