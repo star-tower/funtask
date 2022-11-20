@@ -1,7 +1,7 @@
 import math
 from dataclasses import field
 from enum import unique, auto
-from typing import NewType, TypeVar, List, Any, Dict, Optional, Callable, Awaitable
+from typing import NewType, TypeVar, List, Any, Dict, Optional, Callable, Awaitable, Union
 
 from pydantic.dataclasses import dataclass
 
@@ -15,7 +15,7 @@ FuncGroupUUID = NewType("FuncGroupUUID", str)
 TaskGroupUUID = NewType("TaskGroupUUID", str)
 CronTaskUUID = NewType("CronTaskUUID", str)
 FuncUUID = NewType("FuncUUID", str)
-FuncParameterSchemaUUID = NewType("FuncParameterSchemaUUID", str)
+ParameterSchemaUUID = NewType("ParameterSchemaUUID", str)
 TaskQueryCursor = NewType("TaskQueryCursor", str)
 SchedulerNodeUUID = NewType("SchedulerNodeUUID", str)
 ClusterUUID = NewType("ClusterUUID", str)
@@ -26,25 +26,23 @@ FuncArgumentGroupUUID = NewType("FuncArgumentGroupUUID", str)
 @dataclass
 class Task:
     uuid: TaskUUID
-    parent_task: TaskUUID | CronTaskUUID | None
+    parent_task_uuid: TaskUUID | CronTaskUUID | None
     uuid_in_manager: TaskUUID | None
     status: 'TaskStatus'
     worker_uuid: WorkerUUID | None
-    func: 'Func'
+    func: 'Union[Func, FuncUUID]'
     argument: 'Optional[FuncArgument]'
     result_as_state: bool
     timeout: float
     description: str
     result: Any = None
-    func_uuid: FuncUUID | None = None
-    func_name: str | None = None
     name: str | None = None
 
 
 @dataclass
 class ArgumentQueue:
     name: str
-    parameter_schema: 'FuncParameterSchema'
+    parameter_schema: 'ParameterSchema'
 
 
 @unique
@@ -90,7 +88,8 @@ class WorkerStrategy:
 class CronTask:
     uuid: CronTaskUUID
     timepoints: List['TimePoint']
-    func: 'Func'
+    # use func uuid on insert exist
+    func: 'Union[Func, FuncUUID]'
     argument_generate_strategy: ArgumentStrategy
     worker_choose_strategy: WorkerStrategy
     task_queue_strategy: 'QueueStrategy'
@@ -98,8 +97,6 @@ class CronTask:
     timeout: float
     description: str
     disabled: bool
-    func_uuid: FuncUUID | None = None
-    func_name: str | None = None
     name: str | None = None
     tags: List[str] = field(default_factory=list)
 
@@ -109,9 +106,10 @@ class Func:
     uuid: FuncUUID
     func: bytes
     dependencies: List[str]
-    parameter_schema: 'Optional[FuncParameterSchema]'
+    parameter_schema: 'Optional[Union[ParameterSchema, ParameterSchemaUUID]]'
     description: str
     tags: List[str] = field(default_factory=list)
+    name: str | None = None
 
 
 @dataclass
@@ -132,8 +130,8 @@ class FuncGroup:
 
 
 @dataclass
-class FuncParameterSchema:
-    uuid: FuncParameterSchemaUUID
+class ParameterSchema:
+    uuid: ParameterSchemaUUID
 
 
 @unique
@@ -153,7 +151,7 @@ class TimePoint:
     at: str | None
 
     def __str__(self):
-        return f"{self.n}/{self.unit}" + f"/{self.at}" if self.at is not None else ""
+        return f"{self.n}/{self.unit}" + (f"/{self.at}" if self.at is not None else "")
 
 
 @unique

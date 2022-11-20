@@ -474,7 +474,7 @@ class Repository:
         ...
 
     @abstractmethod
-    async def add_task(self, task: entities.Task, session=None) -> entities.TaskUUID:
+    async def add_task(self, task: entities.Task, session=None):
         ...
 
     @abstractmethod
@@ -482,11 +482,11 @@ class Repository:
         ...
 
     @abstractmethod
-    async def add_func(self, func: entities.Func, session=None) -> entities.FuncUUID:
+    async def add_func(self, func: entities.Func, session=None):
         ...
 
     @abstractmethod
-    async def add_worker(self, worker: entities.Worker, session=None) -> entities.WorkerUUID:
+    async def add_worker(self, worker: entities.Worker, session=None):
         ...
 
     @abstractmethod
@@ -498,15 +498,15 @@ class Repository:
         ...
 
     @abstractmethod
-    async def add_cron_task(self, task: entities.CronTask, session=None) -> entities.TaskUUID:
+    async def add_cron_task(self, task: entities.CronTask, session=None):
         ...
 
     @abstractmethod
     async def add_func_parameter_schema(
             self,
-            func_parameter_schema: entities.FuncParameterSchema,
+            func_parameter_schema: entities.ParameterSchema,
             session=None
-    ) -> entities.FuncParameterSchemaUUID:
+    ):
         ...
 
     @abstractmethod
@@ -545,6 +545,10 @@ class Repository:
 
     @abstractmethod
     async def create_model_schema(self):
+        ...
+
+    @abstractmethod
+    async def get_function_from_uuid(self, func_uuid: entities.FuncUUID, session=None) -> entities.Func:
         ...
 
 
@@ -649,8 +653,8 @@ class WebServer:
     @abstractmethod
     async def add_parameter_schema(
             self,
-            parameter_schema: entities.FuncParameterSchema
-    ) -> entities.FuncParameterSchemaUUID:
+            parameter_schema: entities.ParameterSchema
+    ) -> entities.ParameterSchemaUUID:
         ...
 
 

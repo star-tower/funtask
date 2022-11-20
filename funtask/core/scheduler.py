@@ -6,7 +6,8 @@ from typing import List, Dict, Any, cast
 from pydantic.dataclasses import dataclass
 
 from funtask.core import interface_and_types as interface
-from funtask.core.interface_and_types import SchedulerNode, entities, RecordNotFoundException, StatusReport
+from funtask.core import entities
+from funtask.core.interface_and_types import SchedulerNode, RecordNotFoundException, StatusReport
 from dataclasses import asdict
 
 
@@ -78,10 +79,14 @@ class WorkerScheduler(interface.Scheduler):
         assert task.worker_uuid is not None, ValueError(
             'worker uuid cannot be None'
         )
+        if isinstance(task.func, entities.FuncUUID):
+            func = await self.repository.get_function_from_uuid(func_uuid=task.func)
+        else:
+            func = task.func
         task_uuid_in_manager = await self.funtask_manager.dispatch_fun_task(
             worker_uuid=task.worker_uuid,
-            func_task=task.func.func,
-            dependencies=task.func.dependencies,
+            func_task=func.func,
+            dependencies=func.dependencies,
             change_status=task.result_as_state,
             timeout=task.timeout,
             argument=task.argument
@@ -198,7 +203,7 @@ class WorkerScheduler(interface.Scheduler):
                 else:
                     await self.repository.add_task(entities.Task(
                         uuid=new_task_uuid,
-                        parent_task=cron_task.uuid,
+                        parent_task_uuid=cron_task.uuid,
                         uuid_in_manager=None,
                         status=entities.TaskStatus.SKIP,
                         worker_uuid=None,
@@ -223,7 +228,7 @@ class WorkerScheduler(interface.Scheduler):
             case entities.ArgumentGenerateStrategy.SKIP:
                 await self.repository.add_task(entities.Task(
                     uuid=new_task_uuid,
-                    parent_task=cron_task.uuid,
+                    parent_task_uuid=cron_task.uuid,
                     uuid_in_manager=None,
                     status=entities.TaskStatus.SKIP,
                     worker_uuid=None,
@@ -236,7 +241,7 @@ class WorkerScheduler(interface.Scheduler):
             case entities.ArgumentGenerateStrategy.STATIC:
                 await self.repository.add_task(entities.Task(
                     uuid=new_task_uuid,
-                    parent_task=cron_task.uuid,
+                    parent_task_uuid=cron_task.uuid,
                     uuid_in_manager=None,
                     status=entities.TaskStatus.SCHEDULED,
                     worker_uuid=None,
@@ -260,7 +265,7 @@ class WorkerScheduler(interface.Scheduler):
                     argument = await argument_queue.get(0)
                     await self.repository.add_task(entities.Task(
                         uuid=new_task_uuid,
-                        parent_task=cron_task.uuid,
+                        parent_task_uuid=cron_task.uuid,
                         uuid_in_manager=None,
                         status=entities.TaskStatus.SCHEDULED,
                         worker_uuid=None,
@@ -277,7 +282,7 @@ class WorkerScheduler(interface.Scheduler):
                         case entities.ArgumentGenerateStrategy.FROM_QUEUE_END_SKIP:
                             await self.repository.add_task(entities.Task(
                                 uuid=new_task_uuid,
-                                parent_task=cron_task.uuid,
+                                parent_task_uuid=cron_task.uuid,
                                 uuid_in_manager=None,
                                 status=entities.TaskStatus.SKIP,
                                 worker_uuid=None,
@@ -293,7 +298,7 @@ class WorkerScheduler(interface.Scheduler):
                             except interface.EmptyQueueException:
                                 await self.repository.add_task(entities.Task(
                                     uuid=new_task_uuid,
-                                    parent_task=cron_task.uuid,
+                                    parent_task_uuid=cron_task.uuid,
                                     uuid_in_manager=None,
                                     status=entities.TaskStatus.ERROR,
                                     worker_uuid=None,
@@ -307,7 +312,7 @@ class WorkerScheduler(interface.Scheduler):
                                 return
                             await self.repository.add_task(entities.Task(
                                 uuid=new_task_uuid,
-                                parent_task=cron_task.uuid,
+                                parent_task_uuid=cron_task.uuid,
                                 uuid_in_manager=None,
                                 status=entities.TaskStatus.SCHEDULED,
                                 worker_uuid=None,
