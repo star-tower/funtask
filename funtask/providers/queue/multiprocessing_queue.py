@@ -2,7 +2,7 @@ import asyncio
 import time
 from multiprocessing import Queue as MltQueue
 from queue import Empty
-from typing import Dict
+from typing import Dict, Generic
 
 import dill
 
@@ -22,13 +22,13 @@ class MultiprocessingQueueFactory:
         return q
 
 
-class MultiprocessingQueue(Queue):
+class MultiprocessingQueue(Queue, Generic[_T]):
     def __init__(self):
         self.q = MltQueue()
         self.type = 'multiprocessing'
         self.config = {}
 
-    async def watch_and_get(self, break_ref: BreakRef, timeout: None | float = None) -> _T:
+    async def watch_and_get(self, break_ref: BreakRef, timeout: None | float = None) -> _T | None:
         start_time = time.time()
         while True:
             if timeout and time.time() - start_time >= timeout:
@@ -43,7 +43,7 @@ class MultiprocessingQueue(Queue):
     async def put(self, obj: _T):
         self.q.put(dill.dumps(obj))
 
-    async def get(self, timeout: None | float = None) -> _T:
+    async def get(self, timeout: None | float = None) -> _T | None:
         return await self.watch_and_get(NeverBreak(), timeout)
 
     async def qsize(self) -> int:

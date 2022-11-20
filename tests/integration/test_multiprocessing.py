@@ -1,9 +1,9 @@
 import asyncio
 import os
-from typing import Dict
+from typing import Dict, Generator
 
 from funtask.core.interface_and_types import Logger
-from funtask.core.entities import TaskStatus
+from funtask.core.entities import TaskStatus, WorkerStatus
 from funtask.core.task_worker_manager import FunTaskManager
 from funtask.providers.loggers.std import StdLogger
 from funtask.providers.queue.multiprocessing_queue import MultiprocessingQueue, MultiprocessingQueueFactory
@@ -13,7 +13,7 @@ import pytest
 THIS_FILE_IMPORT_PATH = 'tests.integration.test_multiprocessing'
 
 
-async def get_status(manager: FunTaskManager, status_map: Dict[str, TaskStatus]):
+async def get_status(manager: FunTaskManager, status_map: Dict[str, TaskStatus | None | WorkerStatus]):
     while True:
         status = await manager.get_queued_status(.1)
         if status is not None and status.task_uuid:
@@ -23,7 +23,7 @@ async def get_status(manager: FunTaskManager, status_map: Dict[str, TaskStatus])
 
 
 @pytest.fixture
-def manager() -> FunTaskManager:
+def manager() -> Generator[FunTaskManager, None, None]:
     task_status_queue = MultiprocessingQueue()
     manager = FunTaskManager(
         worker_manager=MultiprocessingManager(
@@ -42,6 +42,7 @@ def manager() -> FunTaskManager:
 class TestMultiprocessing:
     async def test_worker_up_stop(self, manager: FunTaskManager):
         workers_uuid = await manager.increase_workers(10)
+        assert len(workers_uuid) == 10
         [await manager.stop_worker(worker_uuid) for worker_uuid in workers_uuid]
 
     async def test_worker_up_kill(self, manager: FunTaskManager):
@@ -49,7 +50,7 @@ class TestMultiprocessing:
         [await manager.kill_worker(worker_uuid) for worker_uuid in workers_uuid]
 
     async def test_task_exec(self, manager: FunTaskManager):
-        def task(_, __):
+        def task(_, __: Logger):
             with open('task_done_flag', 'w'):
                 ...
 
@@ -79,7 +80,8 @@ class TestMultiprocessing:
         )
         await asyncio.sleep(4)
         await manager.kill_worker(worker_uuid)
-        assert os.path.exists('task_0_done_flag') and os.path.exists('task_1_done_flag')
+        assert os.path.exists('task_0_done_flag') and os.path.exists(
+            'task_1_done_flag')
         os.remove('task_0_done_flag')
         os.remove('task_1_done_flag')
 

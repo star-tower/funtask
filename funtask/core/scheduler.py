@@ -15,7 +15,7 @@ def _task_with_point2name(cron_task: entities.CronTask, time_point: entities.Tim
 
 
 def _task_from_name(name: str) -> entities.CronTaskUUID:
-    return cast(name.split('/')[0], entities.CronTaskUUID)
+    return cast(entities.CronTaskUUID, name.split('/')[0])
 
 
 def _filter_task_uuid_from_names(names: List[str], task_uuid: entities.CronTaskUUID) -> List[str]:
@@ -40,6 +40,9 @@ class WorkerScheduler(interface.Scheduler):
 
     async def process_new_status(self, status_report: StatusReport):
         if isinstance(status_report.status, entities.TaskStatus):
+            assert status_report.task_uuid is not None, ValueError(
+                'task uuid is None in status report'
+            )
             task = await self.repository.get_task_from_uuid(
                 status_report.task_uuid
             )
@@ -72,6 +75,9 @@ class WorkerScheduler(interface.Scheduler):
         task = await self.repository.get_task_from_uuid(task_uuid)
         if task is None:
             raise RecordNotFoundException(f"record {task_uuid}")
+        assert task.worker_uuid is not None, ValueError(
+            'worker uuid cannot be None'
+        )
         task_uuid_in_manager = await self.funtask_manager.dispatch_fun_task(
             worker_uuid=task.worker_uuid,
             func_task=task.func.func,
@@ -87,7 +93,8 @@ class WorkerScheduler(interface.Scheduler):
 
     async def remove_cron_task(self, task_uuid: entities.CronTaskUUID) -> bool:
         all_cron_tasks = await self.cron.get_all()
-        target_cron_tasks = _filter_task_uuid_from_names(all_cron_tasks, task_uuid)
+        target_cron_tasks = _filter_task_uuid_from_names(
+            all_cron_tasks, task_uuid)
         [await self.cron.cancel(target_cron_task) for target_cron_task in target_cron_tasks]
         return True
 
@@ -105,10 +112,12 @@ class WorkerScheduler(interface.Scheduler):
         :return: strategy with no udf
         """
         if depth > max_depth:
-            raise RecursionError(f"max depth of resolve queue strategy {max_depth}")
+            raise RecursionError(
+                f"max depth of resolve queue strategy {max_depth}")
         if task_queue_strategy.full_strategy != entities.QueueFullStrategy.UDF:
             return task_queue_strategy
-        assert task_queue_strategy.udf is not None, ValueError("task UDF strategy must not None")
+        assert task_queue_strategy.udf is not None, ValueError(
+            "task UDF strategy must not None")
         if task_queue_strategy.udf_extra:
             info_dict.update(task_queue_strategy.udf_extra)
         new_strategy = await task_queue_strategy.udf(info_dict)
@@ -128,10 +137,12 @@ class WorkerScheduler(interface.Scheduler):
         :return: strategy with no udf
         """
         if depth > max_depth:
-            raise RecursionError(f"max depth of resolve queue strategy {max_depth}")
+            raise RecursionError(
+                f"max depth of resolve queue strategy {max_depth}")
         if argument_strategy != entities.ArgumentGenerateStrategy.UDF:
             return argument_strategy
-        assert argument_strategy.udf is not None, ValueError("argument UDF strategy must not None")
+        assert argument_strategy.udf is not None, ValueError(
+            "argument UDF strategy must not None")
         if argument_strategy.udf_extra:
             info_dict.update(argument_strategy.udf_extra)
         new_strategy = await argument_strategy.udf(info_dict)
@@ -151,10 +162,12 @@ class WorkerScheduler(interface.Scheduler):
         :return: strategy with no udf
         """
         if depth > max_depth:
-            raise RecursionError(f"max depth of resolve queue strategy {max_depth}")
+            raise RecursionError(
+                f"max depth of resolve queue strategy {max_depth}")
         if worker_choose_strategy.strategy != entities.WorkerChooseStrategy.UDF:
             return worker_choose_strategy
-        assert worker_choose_strategy.udf is not None, ValueError("worker choose UDF strategy must not None")
+        assert worker_choose_strategy.udf is not None, ValueError(
+            "worker choose UDF strategy must not None")
         if worker_choose_strategy.udf_extra:
             info_dict.update(worker_choose_strategy.udf_extra)
         new_strategy = await worker_choose_strategy.udf(info_dict)
@@ -168,14 +181,16 @@ class WorkerScheduler(interface.Scheduler):
         new_task_uuid = cast(entities.TaskUUID, str(uuid.uuid4()))
         match worker_choose_strategy.strategy:
             case entities.WorkerChooseStrategy.STATIC:
-                assert worker_choose_strategy.static_worker is not None, ValueError("static worker must not None")
+                assert worker_choose_strategy.static_worker is not None, ValueError(
+                    "static worker must not None")
                 return worker_choose_strategy.static_worker
             case entities.WorkerChooseStrategy.RANDOM_FROM_LIST:
                 assert worker_choose_strategy.workers is not None and len(worker_choose_strategy.workers) != 0, \
                     ValueError("workers must not None")
                 return random.choice(worker_choose_strategy.workers)
             case entities.WorkerChooseStrategy.RANDOM_FROM_WORKER_TAGS:
-                assert worker_choose_strategy.worker_tags is not None, ValueError("worker tags should not be None")
+                assert worker_choose_strategy.worker_tags is not None, ValueError(
+                    "worker tags should not be None")
                 workers = await self.repository.get_workers_from_tags(worker_choose_strategy.worker_tags)
                 if workers:
                     choose_worker: entities.Worker = random.choice(workers)
@@ -232,8 +247,8 @@ class WorkerScheduler(interface.Scheduler):
                     description=cron_task.description
                 ))
             case entities.ArgumentGenerateStrategy.FROM_QUEUE_END_DROP | \
-                 entities.ArgumentGenerateStrategy.FROM_QUEUE_END_SKIP | \
-                 entities.ArgumentGenerateStrategy.FROM_QUEUE_END_REPEAT_LATEST:
+                    entities.ArgumentGenerateStrategy.FROM_QUEUE_END_SKIP | \
+                    entities.ArgumentGenerateStrategy.FROM_QUEUE_END_REPEAT_LATEST:
                 assert argument_strategy.argument_queue is not None, ValueError(
                     f"must assign argument queue if strategy is {argument_strategy.strategy}"
                 )
@@ -303,7 +318,8 @@ class WorkerScheduler(interface.Scheduler):
                                 description=cron_task.description
                             ))
             case _:
-                raise NotImplementedError(f"not implement strategy {argument_strategy.strategy}")
+                raise NotImplementedError(
+                    f"not implement strategy {argument_strategy.strategy}")
 
     async def _create_cron_sub_task(self, cron_task: entities.CronTask):
         # resolve udf strategy
@@ -323,7 +339,7 @@ class WorkerScheduler(interface.Scheduler):
         if worker is None:
             return
             # lock worker and check queue status
-        with self.lock.lock(worker):
+        async with self.lock.lock(worker):
             queue_strategy = await self._resolve_task_queue_strategy(
                 cron_task.task_queue_strategy,
                 asdict(cron_task)
@@ -351,7 +367,8 @@ class WorkerScheduler(interface.Scheduler):
                     case entities.QueueFullStrategy.SEIZE:
                         await self.assign_task(new_task_uuid)
                     case _:
-                        raise NotImplementedError(f"not implemented strategy {queue_strategy.full_strategy}")
+                        raise NotImplementedError(
+                            f"not implemented strategy {queue_strategy.full_strategy}")
 
     async def assign_cron_task(self, task_uuid: entities.CronTaskUUID):
         cron_task = await self.repository.get_cron_task_from_uuid(task_uuid)
@@ -414,9 +431,15 @@ class WorkerScheduler(interface.Scheduler):
 class LeaderScheduler(interface.LeaderScheduler):
     def __init__(self, scheduler_rpc: interface.LeaderSchedulerRPC, repository: interface.Repository):
         self.scheduler_rpc: interface.LeaderSchedulerRPC = scheduler_rpc
-        self.nodes = await self.scheduler_rpc.get_all_nodes()
-        self.node_responsible_tasks_dict = await self._get_all_node_responsible_tasks(self.nodes)
+        self.nodes: List[SchedulerNode] | None = None
+        self.node_responsible_tasks_dict = None
         self.repository = repository
+
+    async def _load_dependencies_if_not_loaded(self):
+        if self.nodes is None:
+            self.nodes = await self.scheduler_rpc.get_all_nodes()
+        if self.node_responsible_tasks_dict is None:
+            self.node_responsible_tasks_dict = await self._get_all_node_responsible_tasks(self.nodes)
 
     async def _get_all_node_responsible_tasks(
             self,
@@ -429,7 +452,8 @@ class LeaderScheduler(interface.LeaderScheduler):
     async def scheduler_node_change(self, scheduler_nodes: List[SchedulerNode]):
         current_node_responsible_tasks_dict = await self._get_all_node_responsible_tasks(scheduler_nodes)
         all_tasks = set(task.uuid for task in await self.repository.get_all_cron_task())
-        covered_task = set(sum(current_node_responsible_tasks_dict.values(), []))
+        covered_task = set(
+            sum(current_node_responsible_tasks_dict.values(), []))
         not_assigned_task_uuids = all_tasks - covered_task
         # give down node's task to other
         for task_uuid in not_assigned_task_uuids:
@@ -439,14 +463,19 @@ class LeaderScheduler(interface.LeaderScheduler):
             )
         self.node_responsible_tasks_dict = current_node_responsible_tasks_dict
 
-    async def rebalance(self, rebalance_date: datetime):
+    async def rebalance(self, rebalanced_date: datetime):
+        if self.nodes is None or self.node_responsible_tasks_dict is None:
+            await self._load_dependencies_if_not_loaded()
+        assert self.nodes is not None and self.node_responsible_tasks_dict is not None, ValueError(
+            'internal error for nodes or responsible dict should not be none'
+        )
         for node, tasks in self.node_responsible_tasks_dict.items():
             for task_uuid in tasks:
-                await self.scheduler_rpc.remove_task_from_node(node, task_uuid, rebalance_date)
+                await self.scheduler_rpc.remove_task_from_node(node, task_uuid, rebalanced_date)
                 await self.scheduler_rpc.assign_task_to_node(
                     random.choice(self.nodes),
                     task_uuid,
-                    rebalance_date
+                    rebalanced_date
                 )
 
 
@@ -506,11 +535,14 @@ class Scheduler:
                         rebalanced_frequency:
                     leader_last_rebalanced_time = datetime.now()
                     await self.leader_scheduler.rebalance(
-                        leader_last_rebalanced_time + self.scheduler_config.leader_scheduler.rebalanced_frequency / 2
+                        leader_last_rebalanced_time +
+                        self.scheduler_config.leader_scheduler.rebalanced_frequency / 2
                     )
                 # is worker scheduler
                 else:
-                    status_report = await self.task_manager_rpc.get_queued_status()
+                    status_report = await self.task_manager_rpc.get_queued_status(0.01)
+                    if status_report is None:
+                        continue
                     await self.worker_scheduler.process_new_status(status_report)
             else:
                 await self.leader_control.elect_leader(self.self_node.uuid)

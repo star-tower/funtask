@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 import dill
 
@@ -18,7 +18,7 @@ except ImportError:
 _T = TypeVar('_T')
 
 
-class RedisQueue(Queue):
+class RedisQueue(Queue, Generic[_T]):
     def __init__(self, queue_id: str, *args, **kwargs):
         self.r = redis.Redis(*args, **kwargs)
         self.qid = queue_id
@@ -35,10 +35,10 @@ class RedisQueue(Queue):
     async def put(self, obj: _T):
         await self.r.sadd(dill.dumps(obj))
 
-    async def get(self, timeout: None | float = None) -> _T:
+    async def get(self, timeout: None | float = None) -> _T | None:
         return await self.watch_and_get(NeverBreak(), timeout)
 
-    async def watch_and_get(self, break_ref: BreakRef, timeout: None | float = None) -> _T:
+    async def watch_and_get(self, break_ref: BreakRef, timeout: None | float = None) -> _T | None:
         start_time = time.time()
         while True:
             if timeout and time.time() - start_time >= timeout:

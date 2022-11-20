@@ -45,17 +45,21 @@ class Worker(Base):
 
 class ParameterSchema(Base):
     __tablename__ = 'parameter_schema'
-    id = Column(Integer(), primary_key=True, autoincrement=True, nullable=False)
+    id = Column(Integer(), primary_key=True,
+                autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False)
     functions: 'List[Function]'
 
 
 class Function(Base):
     __tablename = 'function'
-    id = Column(BigInteger, primary_key=True, autoincrement=True, nullable=False)
+    id = Column(BigInteger, primary_key=True,
+                autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False)
-    parameter_schema_id = Column(Integer(), ForeignKey('parameter_schema.id'), nullable=True)
-    parameter_schema: ParameterSchema | None = relationship('ParameterSchema', backref='functions')
+    parameter_schema_id = Column(Integer(), ForeignKey(
+        'parameter_schema.id'), nullable=True)
+    parameter_schema: ParameterSchema | None = relationship(
+        'ParameterSchema', backref='functions')
     function = Column(VARBINARY(1024), nullable=False)
     name = Column(String(64), nullable=True)
     ref_tasks: 'List[Task]'
@@ -64,7 +68,8 @@ class Function(Base):
 
 class Task(Base):
     __tablename__ = 'task'
-    id = Column(BigInteger, primary_key=True, autoincrement=True, nullable=False)
+    id = Column(BigInteger, primary_key=True,
+                autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False)
     uuid_in_manager = Column(String(36), nullable=False)
     parent_task = Column(String(36), nullable=True)
@@ -96,7 +101,7 @@ class Queue(AutoName):
     __tablename__ = 'queue'
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False)
-    name = Column(String(64), nullable=False)
+    name = Column(String(64), nullable=False)  # type: ignore
 
 
 @unique
@@ -132,23 +137,33 @@ class Tag(Base):
 class CronTask(Base):
     __tablename__ = 'cron_task'
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    uuid = Column(String(36), nullable=False)
+    uuid = Column(String(36), nullable=False, unique=True)
     name = Column(String(64), nullable=False)
-    function_id = Column(BigInteger(), ForeignKey('functions.id'), nullable=False)
+    function_id = Column(BigInteger(), ForeignKey(
+        'functions.id'), nullable=False)
     argument_generate_strategy = Column(Enum(ArgumentStrategy), nullable=False)
-    argument_generate_strategy_static_value = Column(VARBINARY(1024), nullable=True)
-    argument_generate_strategy_args_queue = Column(String(36), ForeignKey('queue.id'), nullable=True)
-    argument_generate_strategy_udf = Column(String(36), ForeignKey('function.id'), nullable=True)
-    argument_generate_strategy_udf_extra = Column(VARBINARY(1024), nullable=True)
+    argument_generate_strategy_static_value = Column(
+        VARBINARY(1024), nullable=True)
+    argument_generate_strategy_args_queue = Column(
+        String(36), ForeignKey('queue.id'), nullable=True)
+    argument_generate_strategy_udf = Column(
+        String(36), ForeignKey('function.id'), nullable=True)
+    argument_generate_strategy_udf_extra = Column(
+        VARBINARY(1024), nullable=True)
     worker_choose_strategy = Column(Enum(WorkerChooseStrategy), nullable=False)
-    worker_choose_strategy_static_worker = Column(String(36), ForeignKey('worker.uuid'), nullable=True)
-    worker_choose_strategy_worker_list = Column(JSON(none_as_null=False), nullable=True)
-    worker_choose_strategy_worker_tags = Column(JSON(none_as_null=False), nullable=True)
-    worker_choose_strategy_udf = Column(String(36), ForeignKey('function.id'), nullable=True)
+    worker_choose_strategy_static_worker = Column(
+        String(36), ForeignKey('worker.uuid'), nullable=True)
+    worker_choose_strategy_worker_list = Column(
+        JSON(none_as_null=False), nullable=True)
+    worker_choose_strategy_worker_tags = Column(
+        JSON(none_as_null=False), nullable=True)
+    worker_choose_strategy_udf = Column(
+        String(36), ForeignKey('function.id'), nullable=True)
     worker_choose_strategy_udf_extra = Column(VARBINARY(1024), nullable=True)
     task_queue_strategy = Column(Enum(QueueFullStrategy), nullable=False)
     task_queue_max_size = Column(BigInteger(), nullable=False)
-    task_queue_strategy_udf = Column(String(36), ForeignKey('function.id'), nullable=True)
+    task_queue_strategy_udf = Column(
+        String(36), ForeignKey('function.id'), nullable=True)
     task_queue_strategy_udf_extra = Column(VARBINARY(1024), nullable=True)
     result_as_status = Column(Boolean(), nullable=False)
     timeout = Column(Float(), nullable=True)

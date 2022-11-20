@@ -1,10 +1,10 @@
 from abc import abstractmethod
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from dataclasses import field
 import time
 from datetime import datetime
 from enum import unique, auto
-from typing import Callable, List, Generic, TypeVar, Dict, AsyncIterator, Tuple, Any, Awaitable, Generator
+from typing import Callable, List, Generic, TypeVar, Dict, AsyncIterator, Tuple, Any, Awaitable
 
 from mypy_extensions import VarArg
 from dataclasses import dataclass
@@ -87,7 +87,7 @@ class Queue(Generic[_T]):
         ...
 
     @abstractmethod
-    async def watch_and_get(self, break_ref: BreakRef, timeout: None | float = None) -> _T:
+    async def watch_and_get(self, break_ref: BreakRef, timeout: None | float = None) -> _T | None:
         """
         timeout or break flag in break_ref is true will return None
         """
@@ -144,7 +144,8 @@ class WorkerManager:
 
 QueueFactory = Callable[[str], Queue]
 
-FuncTask = Callable[[Any, Logger, VarArg(Any)], _T] | Callable[[Any, Logger, VarArg(Any)], Awaitable[_T]]
+FuncTask = Callable[[Any, Logger, VarArg(Any)], _T] | Callable[[
+    Any, Logger, VarArg(Any)], Awaitable[_T]]
 
 
 @dataclass
@@ -203,7 +204,8 @@ class WorkerQueue:
 class StatusReport:
     worker_uuid: entities.WorkerUUID
     task_uuid: entities.TaskUUID | None
-    status: entities.TaskStatus | entities.WorkerStatus
+    # status uuid is none means this is a worker heart beat
+    status: entities.TaskStatus | entities.WorkerStatus | None
     content: Any
     create_timestamp: float
 
@@ -215,7 +217,7 @@ class FunTaskManager:
     @abstractmethod
     async def increase_workers(
             self,
-            number: int = None,
+            number: int | None = None,
             *args,
             **kwargs
     ) -> List[entities.WorkerUUID]:
@@ -285,7 +287,7 @@ class RPCFunTaskManager:
     @abstractmethod
     async def increase_workers(
             self,
-            number: int = None
+            number: int | None = None
     ) -> List[entities.WorkerUUID]:
         ...
 
@@ -303,7 +305,7 @@ class RPCFunTaskManager:
             dependencies: List[str],
             change_status: bool,
             timeout: float,
-            argument: entities.FuncArgument
+            argument: entities.FuncArgument | None
     ) -> entities.TaskUUID:
         ...
 
@@ -334,6 +336,11 @@ class RPCFunTaskManager:
             self,
             timeout: None | float = None
     ) -> StatusReport | None:
+        """
+        queue empty && timeout is None: block
+        queue empty && timeout is not None: return None
+        queue not empty: return value
+        """
         ...
 
     @abstractmethod
@@ -341,6 +348,7 @@ class RPCFunTaskManager:
         ...
 
 
+@dataclass
 class SchedulerNode:
     uuid: entities.SchedulerNodeUUID
     ip: str
@@ -375,7 +383,7 @@ class LeaderSchedulerRPC:
             self,
             node: SchedulerNode,
             cron_task_uuid: entities.CronTaskUUID,
-            start_time: datetime = None
+            start_time: datetime | None = None
     ):
         ...
 
@@ -388,7 +396,7 @@ class LeaderSchedulerRPC:
             self,
             node: SchedulerNode,
             cron_task_uuid: entities.CronTaskUUID,
-            start_time: datetime = None
+            start_time: datetime | None = None
     ):
         ...
 
@@ -399,23 +407,23 @@ class LeaderSchedulerRPC:
 
 class Cron:
     @abstractmethod
-    async def every_n_seconds(self, name: str, n: int, task: Callable, at: str = None, *args, **kwargs):
+    async def every_n_seconds(self, name: str, n: int, task: Callable, at: str | None = None, *args, **kwargs):
         ...
 
     @abstractmethod
-    async def every_n_minutes(self, name: str, n: int, task: Callable, at: str = None, *args, **kwargs):
+    async def every_n_minutes(self, name: str, n: int, task: Callable, at: str | None = None, *args, **kwargs):
         ...
 
     @abstractmethod
-    async def every_n_hours(self, name: str, n: int, task: Callable, at: str = None, *args, **kwargs):
+    async def every_n_hours(self, name: str, n: int, task: Callable, at: str | None = None, *args, **kwargs):
         ...
 
     @abstractmethod
-    async def every_n_days(self, name: str, n: int, task: Callable, at: str = None, *args, **kwargs):
+    async def every_n_days(self, name: str, n: int, task: Callable, at: str | None = None, *args, **kwargs):
         ...
 
     @abstractmethod
-    async def every_n_weeks(self, name: str, n: int, task: Callable, at: str = None, *args, **kwargs):
+    async def every_n_weeks(self, name: str, n: int, task: Callable, at: str | None = None, *args, **kwargs):
         ...
 
     @abstractmethod
@@ -531,6 +539,14 @@ class Repository:
     ) -> List[entities.Worker]:
         ...
 
+    @abstractmethod
+    async def drop_model_schema(self):
+        ...
+
+    @abstractmethod
+    async def create_model_schema(self):
+        ...
+
 
 class Scheduler:
     @abstractmethod
@@ -581,17 +597,17 @@ class WebServer:
     @abstractmethod
     async def get_tasks(
             self,
-            tags: List[str] = None,
-            func: entities.FuncUUID = None,
-            cursor: entities.TaskQueryCursor = None,
-            limit: int = None
+            tags: List[str] | None = None,
+            func: entities.FuncUUID | None = None,
+            cursor: entities.TaskQueryCursor | None = None,
+            limit: int | None = None
     ) -> Tuple[List[entities.Task], entities.TaskQueryCursor]:
         ...
 
     @abstractmethod
     async def get_funcs(
             self,
-            tags: List[str] = None,
+            tags: List[str] | None = None,
             include_tmp: bool = False
     ) -> List[entities.Func]:
         ...
@@ -643,20 +659,23 @@ class TimeoutException(Exception):
 
 
 class DistributeLock:
-    @contextmanager
-    async def lock(self, name: str, timeout: float = None) -> Generator[None, None, None]:
+    @asynccontextmanager
+    @abstractmethod
+    async def lock(self, name: str, timeout: float | None = None) -> AsyncIterator[None]:
         """
         lock a value, if timeout raise a TimeoutException, default no timeout
         :param name: global lock name
         :param timeout: timeout
         :return
         """
-        ...
+        yield
 
-    @contextmanager
-    async def try_lock(self, name: str) -> Generator[bool, None, None]:
+    @asynccontextmanager
+    @abstractmethod
+    async def try_lock(self, name: str) -> AsyncIterator[bool]:
         """
         try to get a lock, if lock occupied yield false
         :param name: global lock name
         :return:
         """
+        yield True

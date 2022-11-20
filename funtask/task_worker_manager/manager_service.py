@@ -30,7 +30,8 @@ class ManagerService(TaskWorkerManagerBase):
         )
 
     async def increase_worker(self, increase_worker_request: "IncreaseWorkerRequest") -> "IncreaseWorkerResponse":
-        args, kwargs = load_args(increase_worker_request.other_args)
+        args, kwargs = load_args(
+            increase_worker_request.other_args)  # type: ignore
         return IncreaseWorkerResponse(
             Worker((await self.fun_task_manager.increase_worker(*args, **kwargs)))
         )
@@ -65,6 +66,7 @@ class ManagerService(TaskWorkerManagerBase):
     async def get_queued_status(self, empty: "Empty") -> AsyncIterator["GetQueuedStatusResponse"]:
         while True:
             status = await self.fun_task_manager.get_queued_status()
+            assert status is not None, ValueError('status cannot be none')
             yield GetQueuedStatusResponse(StatusReport(
                 worker_uuid=status.worker_uuid,
                 task_uuid=status.task_uuid,

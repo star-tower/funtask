@@ -23,7 +23,7 @@ def _split_task_and_dependencies(
         task, dependencies = lambda _: None, []
     else:
         task, dependencies = state_generator, []
-    return task, dependencies
+    return task, dependencies  # type: ignore
 
 
 def _exec_none(*args, **kwargs):
@@ -66,12 +66,12 @@ class FunTaskManager(interface.FunTaskManager):
 
     async def increase_workers(
             self,
-            number: int = None,
+            number: int | None = None,
             *args,
             **kwargs
     ) -> List[entities.WorkerUUID]:
         workers_uuid = []
-        for i in range(number - 1):
+        for i in range(number or 1):
             workers_uuid.append(await self.increase_worker(*args, **kwargs))
         return workers_uuid
 
@@ -105,7 +105,8 @@ class FunTaskManager(interface.FunTaskManager):
             )
         )
         await self.task_status_queue.put(
-            interface.StatusQueueMessage(worker_uuid, task_uuid, entities.TaskStatus.QUEUED, None)
+            interface.StatusQueueMessage(
+                worker_uuid, task_uuid, entities.TaskStatus.QUEUED, None)
         )
         return task_uuid
 
