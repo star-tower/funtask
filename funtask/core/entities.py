@@ -41,6 +41,7 @@ class Task:
 
 @dataclass
 class ArgumentQueue:
+    uuid: str
     name: str
     parameter_schema: 'ParameterSchema'
 
@@ -61,7 +62,7 @@ class ArgumentStrategy:
     strategy: ArgumentGenerateStrategy
     static_value: 'Optional[FuncArgument]'
     argument_queue: ArgumentQueue | None
-    udf: Callable[[Dict[str, Any]], Awaitable['ArgumentStrategy']] | None
+    udf: 'Func'
     # part of udf arguments
     udf_extra: Dict[str, Any] | None
 
@@ -80,7 +81,7 @@ class WorkerStrategy:
     static_worker: Optional[WorkerUUID]
     workers: Optional[List[WorkerUUID]]
     worker_tags: Optional[List[str]]
-    udf: Callable[[Dict[str, Any]], Awaitable['WorkerStrategy']] | None
+    udf: 'Func'
     udf_extra: Dict[str, Any] | None
 
 
@@ -166,7 +167,7 @@ class QueueFullStrategy(AutoName):
 class QueueStrategy:
     max_size = math.inf
     full_strategy: QueueFullStrategy
-    udf: Callable[[Dict[str, Any]], Awaitable['QueueStrategy']] | None
+    udf: Func
     udf_extra: Dict[str, Any] | None
 
 
