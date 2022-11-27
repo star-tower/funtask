@@ -18,21 +18,30 @@ class FormatException(Exception):
     ...
 
 
+def load_config(config_path: str, container: DependencyContainer):
+    match config_path.split('.')[-1].lower():
+        case 'yaml' | 'yml':
+            container.config.from_yaml(config_path, required=True)
+        case 'ini':
+            container.config.from_ini(config_path)
+        case 'json':
+            container.config.from_json(config_path)
+        case format_:
+            raise FormatException(f'cannot parse config format "{format_}"')
+
+
+def gen_container(config_path: str) -> DependencyContainer:
+    container = DependencyContainer()
+    logger.info("loading config '{config}'", config=config_path)
+    load_config(config_path, container)
+    return container
+
+
 class TaskWorkerManager:
     @staticmethod
     @logger.catch
     async def run(config: str):
-        container = DependencyContainer()
-        logger.info("loading config '{config}'", config=config)
-        match config.split('.')[-1].lower():
-            case 'yaml' | 'yml':
-                container.config.from_yaml(config, required=True)
-            case 'ini':
-                container.config.from_ini(config)
-            case 'json':
-                container.config.from_json(config)
-            case format_:
-                raise FormatException(f'cannot parse config format "{format_}"')
+        container = gen_container(config)
         container.wire(modules=[
             'funtask.task_worker_manager.manager_service'
         ])
@@ -40,8 +49,19 @@ class TaskWorkerManager:
         await rpc_service.run()
 
 
+class Scheduler:
+    @staticmethod
+    @logger.catch
+    async def run(config: str):
+        container = gen_container(config)
+        container.wire(modules=[
+            'funtask.scheduler.scheduler_service'
+        ])
+
+
 class Funtask:
     task_worker_manager = TaskWorkerManager()
+    scheduler = Scheduler()
 
 
 if __name__ == '__main__':

@@ -145,7 +145,7 @@ class WorkerManager:
 QueueFactory = Callable[[str], Queue]
 
 FuncTask = Callable[[Any, Logger, VarArg(Any)], _T] | Callable[[
-    Any, Logger, VarArg(Any)], Awaitable[_T]]
+                                                                   Any, Logger, VarArg(Any)], Awaitable[_T]]
 
 
 @dataclass
@@ -283,7 +283,7 @@ class FunTaskManager:
         ...
 
 
-class RPCFunTaskManager:
+class FunTaskManagerRPC:
     @abstractmethod
     async def increase_workers(
             self,
@@ -348,16 +348,23 @@ class RPCFunTaskManager:
         ...
 
 
-@dataclass
-class SchedulerNode:
-    uuid: entities.SchedulerNodeUUID
-    ip: str
-    port: int
+class TaskWorkerManagerControl:
+    """
+    control service for task_worker_manager, manage all task_worker_manager
+    """
 
-
-class LeaderControl:
     @abstractmethod
-    async def get_leader(self) -> SchedulerNode | None:
+    async def get_all_nodes(self) -> List[entities.TaskWorkerManagerNode]:
+        ...
+
+
+class LeaderSchedulerControl:
+    """
+    control service for leader scheduler, manage all scheduler nodes and leader election
+    """
+
+    @abstractmethod
+    async def get_leader(self) -> entities.SchedulerNode | None:
         ...
 
     @abstractmethod
@@ -369,7 +376,7 @@ class LeaderControl:
         ...
 
     @abstractmethod
-    async def get_all_nodes(self) -> List[SchedulerNode]:
+    async def get_all_nodes(self) -> List[entities.SchedulerNode]:
         ...
 
     @abstractmethod
@@ -381,27 +388,27 @@ class LeaderSchedulerRPC:
     @abstractmethod
     async def assign_task_to_node(
             self,
-            node: SchedulerNode,
+            node: entities.SchedulerNode,
             cron_task_uuid: entities.CronTaskUUID,
             start_time: datetime | None = None
     ):
         ...
 
     @abstractmethod
-    async def get_node_task_list(self, node: SchedulerNode) -> List[entities.CronTaskUUID]:
+    async def get_node_task_list(self, node: entities.SchedulerNode) -> List[entities.CronTaskUUID]:
         ...
 
     @abstractmethod
     async def remove_task_from_node(
             self,
-            node: SchedulerNode,
+            node: entities.SchedulerNode,
             cron_task_uuid: entities.CronTaskUUID,
             start_time: datetime | None = None
     ):
         ...
 
     @abstractmethod
-    async def get_all_nodes(self) -> List[SchedulerNode]:
+    async def get_all_nodes(self) -> List[entities.SchedulerNode]:
         ...
 
 
@@ -552,7 +559,7 @@ class Repository:
         ...
 
 
-class Scheduler:
+class WorkerScheduler:
     @abstractmethod
     async def assign_task(self, task_uuid: entities.TaskUUID):
         ...
@@ -581,7 +588,7 @@ class Scheduler:
 
 class LeaderScheduler:
     @abstractmethod
-    async def scheduler_node_change(self, scheduler_nodes: List[SchedulerNode]):
+    async def scheduler_node_change(self, scheduler_nodes: List[entities.SchedulerNode]):
         ...
 
     @abstractmethod

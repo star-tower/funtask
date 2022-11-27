@@ -8,10 +8,11 @@ from loguru import logger
 from funtask.common.grpc import load_args, core_status2rpc_status
 from funtask.core.entities import WorkerUUID, TaskUUID
 from funtask.core.task_worker_manager import FunTaskManager
+from funtask.generated import Worker, Task, StatusReport
 from funtask.generated.manager import TaskWorkerManagerBase, IncreaseWorkerRequest, \
     IncreaseWorkersRequest, IncreaseWorkerResponse, IncreaseWorkersResponse, DispatchFunTaskResponse, \
-    DispatchFunTaskRequest, StatusReport, StopTaskRequest, StopWorkerRequest, \
-    Empty, KillWorkerRequest, GetQueuedStatusResponse, Worker, Task
+    DispatchFunTaskRequest, StopTaskRequest, StopWorkerRequest, \
+    Empty, KillWorkerRequest, GetQueuedStatusResponse
 
 
 class ManagerService(TaskWorkerManagerBase):

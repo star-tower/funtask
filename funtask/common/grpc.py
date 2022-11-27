@@ -2,7 +2,7 @@ from typing import Tuple, Any, Dict
 import dill
 
 from funtask import WorkerStatus, TaskStatus
-from funtask.generated.manager import Args, StatusReportTaskStatus, StatusReportWorkerStatus
+from funtask.generated import Args, StatusReportTaskStatus, StatusReportWorkerStatus
 
 
 def load_args(args: Args) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:

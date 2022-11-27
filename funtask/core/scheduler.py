@@ -3,11 +3,14 @@ import random
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, cast
+
+import dill
+from dependency_injector.wiring import inject, Provide
 from pydantic.dataclasses import dataclass
 
 from funtask.core import interface_and_types as interface
 from funtask.core import entities
-from funtask.core.interface_and_types import SchedulerNode, RecordNotFoundException, StatusReport
+from funtask.core.interface_and_types import StatusReport
 from dataclasses import asdict
 
 
@@ -23,16 +26,21 @@ def _filter_task_uuid_from_names(names: List[str], task_uuid: entities.CronTaskU
     return [name for name in names if name.startswith(task_uuid)]
 
 
-class WorkerScheduler(interface.Scheduler):
+def _bytes2func(bytes_func: bytes) -> interface.FuncTask:
+    return dill.loads(bytes_func)
+
+
+class WorkerScheduler(interface.WorkerScheduler):
+    @inject
     def __init__(
             self,
-            funtask_manager: interface.RPCFunTaskManager,
-            repository: interface.Repository,
-            cron: interface.Cron,
-            argument_queue_factory: interface.QueueFactory,
-            lock: interface.DistributeLock
+            funtask_manager_rpc: interface.FunTaskManagerRPC = Provide['funtask_manager_rpc'],
+            repository: interface.Repository = Provide['repository'],
+            cron: interface.Cron = Provide['scheduler.cron'],
+            argument_queue_factory: interface.QueueFactory = Provide['scheduler.argument_queue_factory'],
+            lock: interface.DistributeLock = Provide['lock']
     ):
-        self.funtask_manager = funtask_manager
+        self.funtask_manager_rpc = funtask_manager_rpc
         self.repository = repository
         self.task_map: Dict[entities.CronTaskUUID, entities.CronTask] = {}
         self.cron = cron
@@ -74,8 +82,6 @@ class WorkerScheduler(interface.Scheduler):
 
     async def assign_task(self, task_uuid: entities.TaskUUID):
         task = await self.repository.get_task_from_uuid(task_uuid)
-        if task is None:
-            raise RecordNotFoundException(f"record {task_uuid}")
         assert task.worker_uuid is not None, ValueError(
             'worker uuid cannot be None'
         )
@@ -83,7 +89,7 @@ class WorkerScheduler(interface.Scheduler):
             func = await self.repository.get_function_from_uuid(func_uuid=task.func)
         else:
             func = task.func
-        task_uuid_in_manager = await self.funtask_manager.dispatch_fun_task(
+        task_uuid_in_manager = await self.funtask_manager_rpc.dispatch_fun_task(
             worker_uuid=task.worker_uuid,
             func_task=func.func,
             dependencies=func.dependencies,
@@ -125,7 +131,8 @@ class WorkerScheduler(interface.Scheduler):
             "task UDF strategy must not None")
         if task_queue_strategy.udf_extra:
             info_dict.update(task_queue_strategy.udf_extra)
-        new_strategy = await task_queue_strategy.udf(info_dict)
+        udf = _bytes2func(task_queue_strategy.udf.func)
+        new_strategy = await udf(info_dict)
         return await self._resolve_task_queue_strategy(new_strategy, info_dict, depth=depth + 1)
 
     async def _resolve_argument_strategy(
@@ -150,7 +157,8 @@ class WorkerScheduler(interface.Scheduler):
             "argument UDF strategy must not None")
         if argument_strategy.udf_extra:
             info_dict.update(argument_strategy.udf_extra)
-        new_strategy = await argument_strategy.udf(info_dict)
+        udf = _bytes2func(argument_strategy.udf.func)
+        new_strategy = await udf(info_dict)
         return await self._resolve_argument_strategy(new_strategy, info_dict, depth=depth + 1)
 
     async def _resolve_worker_choose_strategy(
@@ -175,7 +183,8 @@ class WorkerScheduler(interface.Scheduler):
             "worker choose UDF strategy must not None")
         if worker_choose_strategy.udf_extra:
             info_dict.update(worker_choose_strategy.udf_extra)
-        new_strategy = await worker_choose_strategy.udf(info_dict)
+        udf = _bytes2func(worker_choose_strategy.udf.func)
+        new_strategy = await udf(info_dict)
         return await self._resolve_worker_choose_strategy(new_strategy, info_dict, depth=depth + 1)
 
     async def _choose_worker_from_worker_choose_strategy(
@@ -252,8 +261,8 @@ class WorkerScheduler(interface.Scheduler):
                     description=cron_task.description
                 ))
             case entities.ArgumentGenerateStrategy.FROM_QUEUE_END_DROP | \
-                    entities.ArgumentGenerateStrategy.FROM_QUEUE_END_SKIP | \
-                    entities.ArgumentGenerateStrategy.FROM_QUEUE_END_REPEAT_LATEST:
+                 entities.ArgumentGenerateStrategy.FROM_QUEUE_END_SKIP | \
+                 entities.ArgumentGenerateStrategy.FROM_QUEUE_END_REPEAT_LATEST:
                 assert argument_strategy.argument_queue is not None, ValueError(
                     f"must assign argument queue if strategy is {argument_strategy.strategy}"
                 )
@@ -357,8 +366,8 @@ class WorkerScheduler(interface.Scheduler):
             # is None means skip or drop task, no need to assign
             if new_task_uuid is None:
                 return
-            task_queue_size = await self.funtask_manager.get_task_queue_size(worker)
-            if task_queue_size > 0:
+            task_queue_size = await self.funtask_manager_rpc.get_task_queue_size(worker)
+            if task_queue_size > cron_task.task_queue_strategy.max_size:
                 await self.assign_task(new_task_uuid)
             else:
                 match queue_strategy.full_strategy:
@@ -377,6 +386,8 @@ class WorkerScheduler(interface.Scheduler):
 
     async def assign_cron_task(self, task_uuid: entities.CronTaskUUID):
         cron_task = await self.repository.get_cron_task_from_uuid(task_uuid)
+        if cron_task.disabled:
+            return
         for time_point in cron_task.timepoints:
             match time_point.unit:
                 case entities.TimeUnit.WEEK:
@@ -434,27 +445,32 @@ class WorkerScheduler(interface.Scheduler):
 
 
 class LeaderScheduler(interface.LeaderScheduler):
-    def __init__(self, scheduler_rpc: interface.LeaderSchedulerRPC, repository: interface.Repository):
-        self.scheduler_rpc: interface.LeaderSchedulerRPC = scheduler_rpc
-        self.nodes: List[SchedulerNode] | None = None
+    @inject
+    def __init__(
+            self,
+            worker_scheduler_rpc: interface.LeaderSchedulerRPC = Provide['scheduler.worker_scheduler_rpc'],
+            repository: interface.Repository = Provide['repository']
+    ):
+        self.worker_scheduler_rpc: interface.LeaderSchedulerRPC = worker_scheduler_rpc
+        self.nodes: List[entities.SchedulerNode] | None = None
         self.node_responsible_tasks_dict = None
         self.repository = repository
 
     async def _load_dependencies_if_not_loaded(self):
         if self.nodes is None:
-            self.nodes = await self.scheduler_rpc.get_all_nodes()
+            self.nodes = await self.worker_scheduler_rpc.get_all_nodes()
         if self.node_responsible_tasks_dict is None:
             self.node_responsible_tasks_dict = await self._get_all_node_responsible_tasks(self.nodes)
 
     async def _get_all_node_responsible_tasks(
             self,
-            nodes: List[SchedulerNode]
-    ) -> Dict[SchedulerNode, List[entities.CronTaskUUID]]:
+            nodes: List[entities.SchedulerNode]
+    ) -> Dict[entities.SchedulerNode, List[entities.CronTaskUUID]]:
         return {
-            node: await self.scheduler_rpc.get_node_task_list(node) for node in nodes
+            node: await self.worker_scheduler_rpc.get_node_task_list(node) for node in nodes
         }
 
-    async def scheduler_node_change(self, scheduler_nodes: List[SchedulerNode]):
+    async def scheduler_node_change(self, scheduler_nodes: List[entities.SchedulerNode]):
         current_node_responsible_tasks_dict = await self._get_all_node_responsible_tasks(scheduler_nodes)
         all_tasks = set(task.uuid for task in await self.repository.get_all_cron_task())
         covered_task = set(
@@ -462,7 +478,7 @@ class LeaderScheduler(interface.LeaderScheduler):
         not_assigned_task_uuids = all_tasks - covered_task
         # give down node's task to other
         for task_uuid in not_assigned_task_uuids:
-            await self.scheduler_rpc.assign_task_to_node(
+            await self.worker_scheduler_rpc.assign_task_to_node(
                 random.choice(scheduler_nodes),
                 task_uuid
             )
@@ -476,8 +492,8 @@ class LeaderScheduler(interface.LeaderScheduler):
         )
         for node, tasks in self.node_responsible_tasks_dict.items():
             for task_uuid in tasks:
-                await self.scheduler_rpc.remove_task_from_node(node, task_uuid, rebalanced_date)
-                await self.scheduler_rpc.assign_task_to_node(
+                await self.worker_scheduler_rpc.remove_task_from_node(node, task_uuid, rebalanced_date)
+                await self.worker_scheduler_rpc.assign_task_to_node(
                     random.choice(self.nodes),
                     task_uuid,
                     rebalanced_date
@@ -501,24 +517,25 @@ class SchedulerConfig:
 
 
 class Scheduler:
+    @inject
     def __init__(
             self,
-            self_node: SchedulerNode,
-            funtask_manager: interface.RPCFunTaskManager,
-            repository: interface.Repository,
-            cron: interface.Cron,
-            argument_queue_factory: interface.QueueFactory,
-            lock: interface.DistributeLock,
-            leader_scheduler_rpc: interface.LeaderSchedulerRPC,
-            leader_control: interface.LeaderControl,
-            scheduler_config: SchedulerConfig,
-            task_manager_rpc: interface.RPCFunTaskManager
+            self_node: entities.SchedulerNode = Provide['scheduler.node'],
+            funtask_manager: interface.FunTaskManagerRPC = Provide['scheduler.funtask_manager_rpc'],
+            repository: interface.Repository = Provide['repository'],
+            cron: interface.Cron = Provide['scheduler.cron'],
+            argument_queue_factory: interface.QueueFactory = Provide['scheduler.argument_queue_factory'],
+            lock: interface.DistributeLock = Provide['lock'],
+            leader_scheduler_rpc: interface.LeaderSchedulerRPC = Provide['scheduler.leader_scheduler_rpc'],
+            leader_control: interface.LeaderSchedulerControl = Provide['scheduler.leader_control'],
+            scheduler_config: SchedulerConfig = Provide['scheduler.config'],
+            task_manager_rpc: interface.FunTaskManagerRPC = Provide['scheduler.task_manager_rpc']
     ):
         self.scheduler_config = scheduler_config
         self.self_node = self_node
         self.leader_control = leader_control
         self.leader_scheduler = LeaderScheduler(
-            scheduler_rpc=leader_scheduler_rpc,
+            worker_scheduler_rpc=leader_scheduler_rpc,
             repository=repository
         )
         self.task_manager_rpc = task_manager_rpc

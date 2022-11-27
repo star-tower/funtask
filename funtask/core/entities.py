@@ -18,9 +18,24 @@ FuncUUID = NewType("FuncUUID", str)
 ParameterSchemaUUID = NewType("ParameterSchemaUUID", str)
 TaskQueryCursor = NewType("TaskQueryCursor", str)
 SchedulerNodeUUID = NewType("SchedulerNodeUUID", str)
+TaskWorkerManagerNodeUUID = NewType("TaskWorkerManagerNodeUUID", str)
 ClusterUUID = NewType("ClusterUUID", str)
 FuncArgumentUUID = NewType("FuncArgumentUUID", str)
 FuncArgumentGroupUUID = NewType("FuncArgumentGroupUUID", str)
+
+
+@dataclass
+class TaskWorkerManagerNode:
+    uuid: TaskWorkerManagerNodeUUID
+    ip: str
+    port: int
+
+
+@dataclass
+class SchedulerNode:
+    uuid: SchedulerNodeUUID
+    ip: str
+    port: int
 
 
 @dataclass
