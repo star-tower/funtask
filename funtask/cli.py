@@ -57,6 +57,16 @@ class Scheduler:
         container.wire(modules=[
             'funtask.scheduler.scheduler_service'
         ])
+        scheduler_service_container = container.scheduler()
+        scheduler = scheduler_service_container.scheduler()
+        await scheduler.run()
+
+
+class WebServer:
+    @staticmethod
+    @logger.catch
+    async def run(config: str):
+        container = gen_container(config)
 
 
 class Funtask:

@@ -1,0 +1,15 @@
+task_worker_manager:
+  logger:
+    type: std
+  queue:
+    task:
+      type: multiprocessing
+    task_status:
+      type: multiprocessing
+    control:
+      type: multiprocessing
+  manager:
+    type: multiprocessing
+  rpc:
+    address: 0.0.0.0
+    port: 2333

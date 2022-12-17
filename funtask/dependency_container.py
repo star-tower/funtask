@@ -12,7 +12,10 @@ class DependencyContainer(containers.DeclarativeContainer):
         config=config.task_worker_manager,
     )
     task_worker_manager_service = providers.Singleton(
-        ManagerServiceRunner
+        ManagerServiceRunner,
+        fun_task_manager=task_worker_manager.fun_task_manager,
+        address=task_worker_manager.rpc.address,
+        port=task_worker_manager.rpc.port
     )
     scheduler = providers.Container(
         SchedulerContainer,

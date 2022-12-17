@@ -12,11 +12,10 @@ _queue_factories = {
 
 class TaskWorkerManagerContainer(containers.DeclarativeContainer):
     config = providers.Configuration()
-    rpc_address = config.service.address
-    rpc_port = config.service.port
+    rpc = config.rpc
     task_status_queue = providers.Singleton(
         providers.Selector(
-            config.get('queue.task.type') or config.queue.strategy,
+            config.queue.task_status.type,
             multiprocessing=providers.Factory(
                 MultiprocessingQueueFactory().factory,
                 name="task_queue"
@@ -24,7 +23,7 @@ class TaskWorkerManagerContainer(containers.DeclarativeContainer):
         )
     )
     logger = providers.Selector(
-        config.logger.strategy,
+        config.logger.type,
         std=providers.Factory(StdLogger)
     )
     fun_task_manager = providers.Factory(
@@ -34,11 +33,11 @@ class TaskWorkerManagerContainer(containers.DeclarativeContainer):
                 MultiprocessingManager,
                 logger=logger,
                 task_queue_factory=providers.Selector(
-                    config.queue.strategy,
+                    config.queue.task.type,
                     **_queue_factories
                 ),
                 control_queue_factory=providers.Selector(
-                    config.queue.strategy,
+                    config.queue.control.type,
                     **_queue_factories
                 ),
                 task_status_queue=task_status_queue

@@ -145,7 +145,7 @@ class WorkerManager:
 QueueFactory = Callable[[str], Queue]
 
 FuncTask = Callable[[Any, Logger, VarArg(Any)], _T] | Callable[[
-                                                                   Any, Logger, VarArg(Any)], Awaitable[_T]]
+    Any, Logger, VarArg(Any)], Awaitable[_T]]
 
 
 @dataclass
@@ -348,7 +348,7 @@ class FunTaskManagerRPC:
         ...
 
 
-class TaskWorkerManagerControl:
+class NodeControl:
     """
     control service for task_worker_manager, manage all task_worker_manager
     """
@@ -596,9 +596,25 @@ class LeaderScheduler:
         ...
 
 
+class RPCChannelChooser(Generic[_T]):
+    @abstractmethod
+    async def get_channel(self, key: bytes | None = None) -> _T:
+        """
+        choose channel for rpc
+        :param key: choose channel depends on key
+        :type key: bytearray
+        :return: rpc channel
+        """
+        ...
+
+
 class WebServer:
     @abstractmethod
-    async def trigger_func(self, func: entities.Func, argument: entities.FuncArgument) -> entities.TaskUUID:
+    async def increase_worker(self, name: str, tags: List[str]) -> entities.Worker:
+        ...
+
+    @abstractmethod
+    async def trigger_func(self, func: entities.Func, argument: entities.FuncArgument) -> entities.Task:
         ...
 
     @abstractmethod
