@@ -335,11 +335,11 @@ class FunTaskManagerRPC:
     async def get_queued_status(
             self,
             timeout: None | float = None
-    ) -> StatusReport | None:
+    ) -> AsyncIterator[StatusReport]:
         """
-        queue empty && timeout is None: block
-        queue empty && timeout is not None: return None
-        queue not empty: return value
+        timeout is None: block
+        timeout is not None and timeout: return None
+        queue not empty: iterator
         """
         ...
 
@@ -597,6 +597,10 @@ class LeaderScheduler:
 
 
 class RPCChannelChooser(Generic[_T]):
+    @abstractmethod
+    def channel_node_changes(self, nodes: List[Any]):
+        ...
+
     @abstractmethod
     async def get_channel(self, key: bytes | None = None) -> _T:
         """

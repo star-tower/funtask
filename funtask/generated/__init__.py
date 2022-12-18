@@ -2,7 +2,10 @@
 # sources: types.proto
 # plugin: python-betterproto
 from dataclasses import dataclass
-from typing import Optional
+from typing import (
+    List,
+    Optional,
+)
 
 import betterproto
 
@@ -19,9 +22,15 @@ class StatusReportTaskStatus(betterproto.Enum):
 
 
 @dataclass(eq=False, repr=False)
+class KwArgs(betterproto.Message):
+    key: str = betterproto.string_field(1)
+    value: bytes = betterproto.bytes_field(2)
+
+
+@dataclass(eq=False, repr=False)
 class Args(betterproto.Message):
-    serialized_args: bytes = betterproto.bytes_field(2)
-    serialized_kwargs: bytes = betterproto.bytes_field(3)
+    serialized_args: List[bytes] = betterproto.bytes_field(2)
+    serialized_kwargs: List["KwArgs"] = betterproto.message_field(3)
 
 
 @dataclass(eq=False, repr=False)

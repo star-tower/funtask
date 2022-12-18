@@ -28,6 +28,9 @@ class MultiprocessingQueue(Queue, Generic[_T]):
         self.type = 'multiprocessing'
         self.config = {}
 
+    async def get_front(self) -> _T | None:
+        raise NotImplementedError('multiprocessing queue not support get front')
+
     async def watch_and_get(self, break_ref: BreakRef, timeout: None | float = None) -> _T | None:
         start_time = time.time()
         while True:

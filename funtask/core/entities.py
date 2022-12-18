@@ -1,7 +1,7 @@
 import math
 from dataclasses import field
 from enum import unique, auto
-from typing import NewType, TypeVar, List, Any, Dict, Optional, Callable, Awaitable, Union
+from typing import NewType, TypeVar, List, Any, Dict, Optional, Union
 
 from pydantic.dataclasses import dataclass
 
@@ -27,7 +27,7 @@ FuncArgumentGroupUUID = NewType("FuncArgumentGroupUUID", str)
 @dataclass
 class TaskWorkerManagerNode:
     uuid: TaskWorkerManagerNodeUUID
-    ip: str
+    host: str
     port: int
 
 
@@ -131,8 +131,8 @@ class Func:
 @dataclass
 class FuncArgument:
     uuid: FuncArgumentUUID
-    args: List[Any]
-    kwargs: Dict[str, Any]
+    args: List[bytes]
+    kwargs: Dict[str, bytes]
 
 
 @dataclass

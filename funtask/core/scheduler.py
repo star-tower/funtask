@@ -525,7 +525,7 @@ class Scheduler:
             repository: interface.Repository = Provide['repository'],
             cron: interface.Cron = Provide['scheduler.cron'],
             argument_queue_factory: interface.QueueFactory = Provide['scheduler.argument_queue_factory'],
-            lock: interface.DistributeLock = Provide['lock'],
+            lock: interface.DistributeLock = Provide['scheduler.lock'],
             leader_scheduler_rpc: interface.LeaderSchedulerRPC = Provide['scheduler.leader_scheduler_rpc'],
             leader_control: interface.LeaderSchedulerControl = Provide['scheduler.leader_control'],
             scheduler_config: SchedulerConfig = Provide['scheduler.config'],
@@ -540,7 +540,7 @@ class Scheduler:
         )
         self.task_manager_rpc = task_manager_rpc
         self.worker_scheduler = WorkerScheduler(
-            funtask_manager=funtask_manager,
+            funtask_manager_rpc=funtask_manager,
             repository=repository,
             cron=cron,
             argument_queue_factory=argument_queue_factory,
@@ -562,10 +562,13 @@ class Scheduler:
                     )
                 # is worker scheduler
                 else:
-                    status_report = await self.task_manager_rpc.get_queued_status(0.01)
-                    if status_report is None:
-                        continue
-                    await self.worker_scheduler.process_new_status(status_report)
+                    status_report_iter = await self.task_manager_rpc.get_queued_status(0.01)
+                    i = 0
+                    async for status_report in status_report_iter:
+                        i += 1
+                        if status_report is None or i >= 1000:
+                            break
+                        await self.worker_scheduler.process_new_status(status_report)
             else:
                 await self.leader_control.elect_leader(self.self_node.uuid)
             await asyncio.sleep(.1)

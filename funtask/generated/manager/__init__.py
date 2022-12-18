@@ -51,7 +51,7 @@ class IncreaseWorkerResponse(betterproto.Message):
 
 @dataclass(eq=False, repr=False)
 class IncreaseWorkersResponse(betterproto.Message):
-    worker: List["_Worker__"] = betterproto.message_field(1)
+    workers: List["_Worker__"] = betterproto.message_field(1)
 
 
 @dataclass(eq=False, repr=False)
