@@ -10,6 +10,8 @@ message Args {
   repeated KWArgs serialized_kwargs = 3;
 }
 
+message Empty {}
+
 message Worker {
   string uuid = 1;
 }

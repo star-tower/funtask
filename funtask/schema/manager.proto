@@ -3,8 +3,6 @@ syntax = "proto3";
 package manager;
 import "types.proto";
 
-message Empty {}
-
 message IncreaseWorkersRequest {
   uint32 number = 1;
   Args other_args = 2;

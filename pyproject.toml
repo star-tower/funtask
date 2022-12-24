@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "funtask"
 description = 'A Python framework for stateful functional task dispatching and execution'
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 license = "MIT"
 keywords = []
 authors = [

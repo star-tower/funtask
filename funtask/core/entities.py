@@ -34,7 +34,7 @@ class TaskWorkerManagerNode:
 @dataclass
 class SchedulerNode:
     uuid: SchedulerNodeUUID
-    ip: str
+    host: str
     port: int
 
 

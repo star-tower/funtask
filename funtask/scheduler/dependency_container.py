@@ -1,11 +1,15 @@
 from dependency_injector import containers, providers
+
+from funtask.providers.leader_scheduler.grpc_leader_scheduler import GRPCLeaderScheduler
+from funtask.providers.leader_scheduler_control.multiprocessing_control import MultiprocessingSchedulerControl
 from funtask.scheduler.scheduler_service import SchedulerService
 from funtask.core import entities
-from funtask.providers.cron.schedule import SchedulerCron
+from funtask.providers.cron.schedule_cron import SchedulerCron
 from funtask.providers.queue.multiprocessing_queue import MultiprocessingQueueFactory
 from funtask.providers.lock.multiprocessing_lock import MultiprocessingLock
 from funtask.providers.db.sql import infrastructure
 from funtask.task_worker_manager import manager_rpc_client
+from funtask.task_worker_manager.manager_rpc_client import ManagerRPCClient, HashRPChooser
 
 
 class SchedulerContainer(containers.DeclarativeContainer):
@@ -13,7 +17,7 @@ class SchedulerContainer(containers.DeclarativeContainer):
     node = providers.Factory(
         entities.SchedulerNode,
         uuid=config.curr_node.uuid,
-        ip=config.curr_node.host,
+        host=config.curr_node.host,
         port=config.curr_node.port
     )
     funtask_manager_rpc = providers.Singleton(
@@ -21,7 +25,7 @@ class SchedulerContainer(containers.DeclarativeContainer):
         rpc_chooser=providers.Selector(
             config.rpc_chooser,
             hash=providers.Factory(
-                manager_rpc_client.HashRPRChooser,
+                manager_rpc_client.HashRPChooser,
                 nodes=[]
             )
         )
@@ -46,7 +50,25 @@ class SchedulerContainer(containers.DeclarativeContainer):
             MultiprocessingLock
         )
     )
-    # TODO: scheduler rpc, leader_control, config, manager_rpc
+    leader_scheduler_rpc = providers.Singleton(
+        GRPCLeaderScheduler
+    )
+    leader_control = providers.Selector(
+        config.control,
+        multiprocessing=providers.Singleton(
+            MultiprocessingSchedulerControl,
+            config.control.leader_node
+        )
+    )
+    task_manager_rpc = providers.Singleton(
+        ManagerRPCClient,
+        rpc_chooser=providers.Selector(
+            config.rpc_chooser,
+            hash=providers.Singleton(
+                HashRPChooser
+            )
+        )
+    )
     scheduler = providers.Singleton(
         SchedulerService
     )

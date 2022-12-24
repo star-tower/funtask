@@ -1,4 +1,4 @@
-from typing import List, cast, AsyncIterator, Any
+from typing import List, cast, AsyncIterator
 from uuid import uuid4
 from grpclib.client import Channel
 
@@ -20,7 +20,7 @@ async def get_rpc(
     return task_worker_manager_rpc.TaskWorkerManagerStub(channel)
 
 
-class HashRPRChooser(interface.RPCChannelChooser[Channel]):
+class HashRPChooser(interface.RPCChannelChooser[Channel]):
     def __init__(self, nodes: List[entities.TaskWorkerManagerNode | entities.SchedulerNode]):
         self.nodes = nodes
 
@@ -40,12 +40,12 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
     async def increase_workers(self, number: int | None = None) -> List[entities.WorkerUUID]:
         rpc = await get_rpc(self.rpc_chooser, bytes_uuid())
         res = await rpc.increase_workers(task_worker_manager_rpc.IncreaseWorkersRequest(number))
-        return [cast(worker.uuid, entities.WorkerUUID) for worker in res.workers]
+        return [cast(entities.WorkerUUID, worker.uuid) for worker in res.workers]
 
     async def increase_worker(self) -> entities.WorkerUUID:
         rpc = await get_rpc(self.rpc_chooser, bytes_uuid())
         res = await rpc.increase_worker(task_worker_manager_rpc.IncreaseWorkerRequest())
-        return cast(res.worker.uuid, entities.WorkerUUID)
+        return cast(entities.WorkerUUID, res.worker.uuid)
 
     async def dispatch_fun_task(self, worker_uuid: entities.WorkerUUID, func_task: bytes, dependencies: List[str],
                                 change_status: bool, timeout: float,
@@ -62,7 +62,7 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
                 [types.KwArgs(k, v) for k, v in argument.kwargs]
             )
         ))
-        return cast(res.task.uuid, entities.TaskUUID)
+        return cast(entities.TaskUUID, res.task.uuid)
 
     async def stop_task(self, worker_uuid: entities.WorkerUUID, task_uuid: entities.TaskUUID):
         rpc = await get_rpc(self.rpc_chooser, (worker_uuid + task_uuid).encode())
@@ -87,8 +87,8 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
             async for res in rpc.get_queued_status(task_worker_manager_rpc.Empty(), timeout=timeout):
                 status_report = res.status_report
                 yield StatusReport(
-                    task_uuid=cast(status_report.task_uuid, entities.TaskUUID),
-                    worker_uuid=cast(status_report.worker_uuid, entities.WorkerUUID),
+                    task_uuid=cast(entities.TaskUUID, status_report.task_uuid),
+                    worker_uuid=cast(entities.WorkerUUID, status_report.worker_uuid),
                     status=status_report.task_status or status_report.worker_status,  # type: ignore
                     content=status_report.serialized_content,
                     create_timestamp=status_report.create_timestamp

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package scheduler;
+import "types.proto";
+
+message AssignTaskRequest {
+  string cron_task_uuid = 2;
+  uint64 start_ms_timestamp = 3;
+}
+
+message GetTaskListResponse {
+  repeated string cron_tasks_uuid = 1;
+}
+
+message RemoveTaskRequest {
+  string cron_task_uuid = 1;
+  uint64 start_ms_timestamp = 2;
+}
+
+service LeaderScheduler {
+  rpc AssignTask(AssignTaskRequest) returns (Empty);
+  rpc GetTaskList(Empty) returns (GetTaskListResponse);
+  rpc RemoveTask(RemoveTaskRequest) returns (Empty);
+}

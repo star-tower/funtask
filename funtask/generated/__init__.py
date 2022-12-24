@@ -34,6 +34,11 @@ class Args(betterproto.Message):
 
 
 @dataclass(eq=False, repr=False)
+class Empty(betterproto.Message):
+    pass
+
+
+@dataclass(eq=False, repr=False)
 class Worker(betterproto.Message):
     uuid: str = betterproto.string_field(1)
 

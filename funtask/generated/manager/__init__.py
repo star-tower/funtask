@@ -16,6 +16,7 @@ from betterproto.grpc.grpclib_server import ServiceBase
 
 from .. import (
     Args as _Args__,
+    Empty as _Empty__,
     StatusReport as _StatusReport__,
     Task as _Task__,
     Worker as _Worker__,
@@ -26,11 +27,6 @@ if TYPE_CHECKING:
     import grpclib.server
     from betterproto.grpc.grpclib_client import MetadataLike
     from grpclib.metadata import Deadline
-
-
-@dataclass(eq=False, repr=False)
-class Empty(betterproto.Message):
-    pass
 
 
 @dataclass(eq=False, repr=False)
@@ -151,11 +147,11 @@ class TaskWorkerManagerStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> "Empty":
+    ) -> "_Empty__":
         return await self._unary_unary(
             "/manager.TaskWorkerManager/StopTask",
             stop_task_request,
-            Empty,
+            _Empty__,
             timeout=timeout,
             deadline=deadline,
             metadata=metadata,
@@ -168,11 +164,11 @@ class TaskWorkerManagerStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> "Empty":
+    ) -> "_Empty__":
         return await self._unary_unary(
             "/manager.TaskWorkerManager/StopWorker",
             stop_worker_request,
-            Empty,
+            _Empty__,
             timeout=timeout,
             deadline=deadline,
             metadata=metadata,
@@ -185,11 +181,11 @@ class TaskWorkerManagerStub(betterproto.ServiceStub):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional["MetadataLike"] = None
-    ) -> "Empty":
+    ) -> "_Empty__":
         return await self._unary_unary(
             "/manager.TaskWorkerManager/KillWorker",
             kill_worker_request,
-            Empty,
+            _Empty__,
             timeout=timeout,
             deadline=deadline,
             metadata=metadata,
@@ -197,7 +193,7 @@ class TaskWorkerManagerStub(betterproto.ServiceStub):
 
     async def get_queued_status(
         self,
-        empty: "Empty",
+        empty: "_Empty__",
         *,
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
@@ -230,17 +226,17 @@ class TaskWorkerManagerBase(ServiceBase):
     ) -> "DispatchFunTaskResponse":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
-    async def stop_task(self, stop_task_request: "StopTaskRequest") -> "Empty":
+    async def stop_task(self, stop_task_request: "StopTaskRequest") -> "_Empty__":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
-    async def stop_worker(self, stop_worker_request: "StopWorkerRequest") -> "Empty":
+    async def stop_worker(self, stop_worker_request: "StopWorkerRequest") -> "_Empty__":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
-    async def kill_worker(self, kill_worker_request: "KillWorkerRequest") -> "Empty":
+    async def kill_worker(self, kill_worker_request: "KillWorkerRequest") -> "_Empty__":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
     async def get_queued_status(
-        self, empty: "Empty"
+        self, empty: "_Empty__"
     ) -> AsyncIterator["GetQueuedStatusResponse"]:
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
@@ -269,28 +265,28 @@ class TaskWorkerManagerBase(ServiceBase):
         await stream.send_message(response)
 
     async def __rpc_stop_task(
-        self, stream: "grpclib.server.Stream[StopTaskRequest, Empty]"
+        self, stream: "grpclib.server.Stream[StopTaskRequest, _Empty__]"
     ) -> None:
         request = await stream.recv_message()
         response = await self.stop_task(request)
         await stream.send_message(response)
 
     async def __rpc_stop_worker(
-        self, stream: "grpclib.server.Stream[StopWorkerRequest, Empty]"
+        self, stream: "grpclib.server.Stream[StopWorkerRequest, _Empty__]"
     ) -> None:
         request = await stream.recv_message()
         response = await self.stop_worker(request)
         await stream.send_message(response)
 
     async def __rpc_kill_worker(
-        self, stream: "grpclib.server.Stream[KillWorkerRequest, Empty]"
+        self, stream: "grpclib.server.Stream[KillWorkerRequest, _Empty__]"
     ) -> None:
         request = await stream.recv_message()
         response = await self.kill_worker(request)
         await stream.send_message(response)
 
     async def __rpc_get_queued_status(
-        self, stream: "grpclib.server.Stream[Empty, GetQueuedStatusResponse]"
+        self, stream: "grpclib.server.Stream[_Empty__, GetQueuedStatusResponse]"
     ) -> None:
         request = await stream.recv_message()
         await self._call_rpc_handler_server_stream(
@@ -323,24 +319,24 @@ class TaskWorkerManagerBase(ServiceBase):
                 self.__rpc_stop_task,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 StopTaskRequest,
-                Empty,
+                _Empty__,
             ),
             "/manager.TaskWorkerManager/StopWorker": grpclib.const.Handler(
                 self.__rpc_stop_worker,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 StopWorkerRequest,
-                Empty,
+                _Empty__,
             ),
             "/manager.TaskWorkerManager/KillWorker": grpclib.const.Handler(
                 self.__rpc_kill_worker,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 KillWorkerRequest,
-                Empty,
+                _Empty__,
             ),
             "/manager.TaskWorkerManager/GetQueuedStatus": grpclib.const.Handler(
                 self.__rpc_get_queued_status,
                 grpclib.const.Cardinality.UNARY_STREAM,
-                Empty,
+                _Empty__,
                 GetQueuedStatusResponse,
             ),
         }

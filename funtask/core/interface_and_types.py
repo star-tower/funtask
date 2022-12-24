@@ -348,7 +348,7 @@ class FunTaskManagerRPC:
         ...
 
 
-class NodeControl:
+class ManagerNodeControl:
     """
     control service for task_worker_manager, manage all task_worker_manager
     """
@@ -405,10 +405,6 @@ class LeaderSchedulerRPC:
             cron_task_uuid: entities.CronTaskUUID,
             start_time: datetime | None = None
     ):
-        ...
-
-    @abstractmethod
-    async def get_all_nodes(self) -> List[entities.SchedulerNode]:
         ...
 
 

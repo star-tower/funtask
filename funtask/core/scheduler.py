@@ -448,9 +448,11 @@ class LeaderScheduler(interface.LeaderScheduler):
     @inject
     def __init__(
             self,
+            leader_control: interface.LeaderSchedulerControl,
             worker_scheduler_rpc: interface.LeaderSchedulerRPC = Provide['scheduler.worker_scheduler_rpc'],
             repository: interface.Repository = Provide['repository']
     ):
+        self.leader_control = leader_control
         self.worker_scheduler_rpc: interface.LeaderSchedulerRPC = worker_scheduler_rpc
         self.nodes: List[entities.SchedulerNode] | None = None
         self.node_responsible_tasks_dict = None
@@ -458,7 +460,7 @@ class LeaderScheduler(interface.LeaderScheduler):
 
     async def _load_dependencies_if_not_loaded(self):
         if self.nodes is None:
-            self.nodes = await self.worker_scheduler_rpc.get_all_nodes()
+            self.nodes = await self.leader_control.get_all_nodes()
         if self.node_responsible_tasks_dict is None:
             self.node_responsible_tasks_dict = await self._get_all_node_responsible_tasks(self.nodes)
 
@@ -535,6 +537,7 @@ class Scheduler:
         self.self_node = self_node
         self.leader_control = leader_control
         self.leader_scheduler = LeaderScheduler(
+            leader_control=leader_control,
             worker_scheduler_rpc=leader_scheduler_rpc,
             repository=repository
         )

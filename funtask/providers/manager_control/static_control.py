@@ -3,7 +3,7 @@ from typing import List
 from funtask.core import interface_and_types as interface, entities
 
 
-class StaticNodeControl(interface.NodeControl):
+class StaticManagerNodeControl(interface.ManagerNodeControl):
     def __init__(self, nodes: List[entities.TaskWorkerManagerNode]):
         self.nodes = nodes
 
