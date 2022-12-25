@@ -1,6 +1,5 @@
 from typing import List, cast
 
-from dependency_injector.wiring import Provide
 from funtask.core import interface_and_types as interface, entities
 
 

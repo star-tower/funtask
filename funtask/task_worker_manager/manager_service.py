@@ -83,7 +83,7 @@ class ManagerServiceRunner:
             self,
             fun_task_manager: FunTaskManager = Provide['task_worker_manager.fun_task_manager'],
             address: str = Provide['task_worker_manager.rpc.address'],
-            port: int = Provide['task_worker_manager.rpc_port']
+            port: int = Provide['task_worker_manager.rpc.port']
     ):
         self.fun_task_manager = fun_task_manager
         self.address = address

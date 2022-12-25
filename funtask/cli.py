@@ -2,8 +2,11 @@ import sys
 
 import fire as fire
 from funtask.core import scheduler
+from funtask.webserver import webserver_service
 from funtask.dependency_container import DependencyContainer
 from loguru import logger
+
+from funtask.task_worker_manager.manager_service import ManagerServiceRunner
 
 logger.remove()
 logger.add(
@@ -45,7 +48,7 @@ class TaskWorkerManager:
         container.wire(modules=[
             'funtask.task_worker_manager.manager_service'
         ])
-        rpc_service = container.task_worker_manager_service()
+        rpc_service = ManagerServiceRunner()
         await rpc_service.run()
 
 
@@ -65,13 +68,19 @@ class Scheduler:
 class WebServer:
     @staticmethod
     @logger.catch
-    async def run(config: str):
+    def run(config: str):
         container = gen_container(config)
+        container.wire(modules=[
+            'funtask.webserver.webserver_service'
+        ])
+        server = webserver_service.Webserver()
+        server.run()
 
 
 class Funtask:
     task_worker_manager = TaskWorkerManager()
     scheduler = Scheduler()
+    webserver = WebServer()
 
 
 if __name__ == '__main__':

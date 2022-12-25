@@ -1,25 +1,29 @@
-from typing import List, Tuple, cast
+from typing import List, Tuple
 from grpclib.client import Channel
 from funtask.core import interface_and_types as interface, entities
 from dependency_injector.wiring import inject, Provide
 from fastapi import FastAPI, APIRouter
+import uvicorn
 
 app = FastAPI()
-api = APIRouter(prefix='api')
+api = APIRouter(prefix='/api')
 
 
 class Webserver(interface.WebServer):
     @inject
     def __init__(
             self,
-            rpc_channel_chooser: interface.RPCChannelChooser[Channel] = Provide['webserver.rpc_channel_chooser'],
-            repository: interface.Repository = Provide['repository'],
-            task_worker_manager_rpc: interface.FunTaskManagerRPC = Provide['task_worker_manager_rpc'],
-
+            rpc_channel_chooser: interface.RPCChannelChooser[Channel] = Provide['webserver.rpc_chooser'],
+            repository: interface.Repository = Provide['webserver.repository'],
+            task_worker_manager_rpc: interface.FunTaskManagerRPC = Provide['webserver.manager_rpc'],
+            host: str = Provide['webserver.service.host'],
+            port: int = Provide['webserver.service.port']
     ):
         self.channel_chooser = rpc_channel_chooser
         self.repository = repository
         self.task_worker_manager_rpc = task_worker_manager_rpc
+        self.host = host
+        self.port = port
 
     @api.post('increase_worker')
     async def increase_worker(self, name: str, tags: List[str]) -> entities.Worker:
@@ -71,3 +75,6 @@ class Webserver(interface.WebServer):
 
     async def add_parameter_schema(self, parameter_schema: entities.ParameterSchema) -> entities.ParameterSchemaUUID:
         pass
+
+    def run(self):
+        uvicorn.run(app, host=self.host, port=self.port)

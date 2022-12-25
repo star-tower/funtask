@@ -33,3 +33,12 @@ scheduler:
       uuid: aaaa
       host: localhost
       port: 2334
+
+webserver:
+  rpc_chooser:
+    type: hash
+  repository:
+    uri: mysql+aiomysql://root:zqqqqz2000@127.0.0.1:3306/funtask
+  service:
+    host: localhost
+    port: 2335
