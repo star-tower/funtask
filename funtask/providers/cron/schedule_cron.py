@@ -12,7 +12,7 @@ class SchedulerCron(interface.Cron):
         self.ms_tasks: Dict[str, (int, Callable, List[Any], Dict[str, Any])] = {}
         self._keep_run = True
         process = Process(target=self._run)
-        process.run()
+        process.start()
 
     def __del__(self):
         self._keep_run = False

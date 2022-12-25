@@ -1,7 +1,7 @@
 import sys
 
 import fire as fire
-
+from funtask.core import scheduler
 from funtask.dependency_container import DependencyContainer
 from loguru import logger
 
@@ -55,11 +55,11 @@ class Scheduler:
     async def run(config: str):
         container = gen_container(config)
         container.wire(modules=[
-            'funtask.scheduler.scheduler_service'
+            'funtask.scheduler.scheduler_service',
+            'funtask.core.scheduler'
         ])
-        scheduler_service_container = container.scheduler()
-        scheduler = scheduler_service_container.scheduler()
-        await scheduler.run()
+        s = scheduler.Scheduler()
+        await s.run()
 
 
 class WebServer:

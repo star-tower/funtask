@@ -6,6 +6,7 @@ from typing import List, Dict, Any, cast
 
 import dill
 from dependency_injector.wiring import inject, Provide
+from loguru import logger
 from pydantic.dataclasses import dataclass
 
 from funtask.core import interface_and_types as interface
@@ -523,7 +524,7 @@ class Scheduler:
     def __init__(
             self,
             self_node: entities.SchedulerNode = Provide['scheduler.node'],
-            funtask_manager: interface.FunTaskManagerRPC = Provide['scheduler.funtask_manager_rpc'],
+            manager_rpc: interface.FunTaskManagerRPC = Provide['scheduler.manager_rpc'],
             repository: interface.Repository = Provide['repository'],
             cron: interface.Cron = Provide['scheduler.cron'],
             argument_queue_factory: interface.QueueFactory = Provide['scheduler.argument_queue_factory'],
@@ -531,7 +532,6 @@ class Scheduler:
             leader_scheduler_rpc: interface.LeaderSchedulerRPC = Provide['scheduler.leader_scheduler_rpc'],
             leader_control: interface.LeaderSchedulerControl = Provide['scheduler.leader_control'],
             scheduler_config: SchedulerConfig = Provide['scheduler.config'],
-            task_manager_rpc: interface.FunTaskManagerRPC = Provide['scheduler.task_manager_rpc']
     ):
         self.scheduler_config = scheduler_config
         self.self_node = self_node
@@ -541,9 +541,9 @@ class Scheduler:
             worker_scheduler_rpc=leader_scheduler_rpc,
             repository=repository
         )
-        self.task_manager_rpc = task_manager_rpc
+        self.task_manager_rpc = manager_rpc
         self.worker_scheduler = WorkerScheduler(
-            funtask_manager_rpc=funtask_manager,
+            funtask_manager_rpc=manager_rpc,
             repository=repository,
             cron=cron,
             argument_queue_factory=argument_queue_factory,
@@ -551,6 +551,7 @@ class Scheduler:
         )
 
     async def run(self):
+        logger.info("scheduler started")
         leader_last_rebalanced_time = datetime.now()
         while True:
             leader = await self.leader_control.get_leader()

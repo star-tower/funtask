@@ -7,7 +7,7 @@ from funtask.core import interface_and_types as interface, entities
 class MultiprocessingSchedulerControl(interface.LeaderSchedulerControl):
     def __init__(
             self,
-            leader_node: entities.SchedulerNode = Provide['scheduler_control.leader_node']
+            leader_node: entities.SchedulerNode
     ):
         self.leader_node = leader_node
 

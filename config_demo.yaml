@@ -17,3 +17,19 @@ task_worker_manager:
 scheduler:
   curr_node:
     uuid: abcd
+    host: localhost
+    port: 2333
+  rpc_chooser:
+    type: hash
+  cron_scheduler:
+    type: schedule
+  argument_queue:
+    type: multiprocessing
+  lock:
+    type: multiprocessing
+  control:
+    type: multiprocessing
+    leader_node:
+      uuid: aaaa
+      host: localhost
+      port: 2334

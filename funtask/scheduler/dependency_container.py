@@ -9,7 +9,6 @@ from funtask.providers.queue.multiprocessing_queue import MultiprocessingQueueFa
 from funtask.providers.lock.multiprocessing_lock import MultiprocessingLock
 from funtask.providers.db.sql import infrastructure
 from funtask.task_worker_manager import manager_rpc_client
-from funtask.task_worker_manager.manager_rpc_client import ManagerRPCClient, HashRPChooser
 
 
 class SchedulerContainer(containers.DeclarativeContainer):
@@ -20,11 +19,11 @@ class SchedulerContainer(containers.DeclarativeContainer):
         host=config.curr_node.host,
         port=config.curr_node.port
     )
-    funtask_manager_rpc = providers.Singleton(
+    manager_rpc = providers.Singleton(
         manager_rpc_client.ManagerRPCClient,
         rpc_chooser=providers.Selector(
-            config.rpc_chooser,
-            hash=providers.Factory(
+            config.rpc_chooser.type,
+            hash=providers.Singleton(
                 manager_rpc_client.HashRPChooser,
                 nodes=[]
             )
@@ -54,18 +53,14 @@ class SchedulerContainer(containers.DeclarativeContainer):
         GRPCLeaderScheduler
     )
     leader_control = providers.Selector(
-        config.control,
+        config.control.type,
         multiprocessing=providers.Singleton(
             MultiprocessingSchedulerControl,
-            config.control.leader_node
-        )
-    )
-    task_manager_rpc = providers.Singleton(
-        ManagerRPCClient,
-        rpc_chooser=providers.Selector(
-            config.rpc_chooser,
-            hash=providers.Singleton(
-                HashRPChooser
+            leader_node=providers.Factory(
+                entities.SchedulerNode,
+                port=config.control.leader_node.port,
+                host=config.control.leader_node.host,
+                uuid=config.control.leader_node.uuid,
             )
         )
     )
