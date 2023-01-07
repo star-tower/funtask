@@ -6,7 +6,17 @@ from funtask.generated import Args, StatusReportTaskStatus, StatusReportWorkerSt
 
 
 def load_args(args: Args) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
-    return dill.loads(args.serialized_args), dill.loads(args.serialized_kwargs)
+    res_args = []
+    res_kwargs = {}
+
+    for rpc_arg in args.serialized_args:
+        res_args.append(dill.loads(rpc_arg))
+
+    for rpc_kwargs in args.serialized_kwargs:
+        k, v = dill.loads(rpc_kwargs)
+        res_args[k] = v
+
+    return tuple(res_args), res_kwargs
 
 
 def dump_args(*args, **kwargs) -> Args:

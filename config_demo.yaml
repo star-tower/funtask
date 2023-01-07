@@ -42,3 +42,7 @@ webserver:
   service:
     host: localhost
     port: 2335
+  task_worker_manager_nodes:
+      - uuid: uuid1
+        host: localhost
+        port: 2333

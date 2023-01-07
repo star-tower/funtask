@@ -152,8 +152,9 @@ class Repository(interface.Repository):
             session: AsyncSession
             session.add(model.Worker(
                 uuid=worker.uuid,
-                status=worker.status,
-                name=worker.name
+                status=worker.status.value,
+                name=worker.name,
+                last_heart_beat=datetime.now()
             ))
 
     async def get_worker_from_uuid(self, task_uuid: entities.WorkerUUID,

@@ -5,11 +5,14 @@ from dependency_injector.wiring import inject, Provide
 from fastapi import FastAPI, APIRouter
 import uvicorn
 
-app = FastAPI()
-api = APIRouter(prefix='/api')
+from funtask.webserver.models import IncreaseWorkerReq
+from funtask.webserver.utils import self_wrapper, SelfPointer
+
+api = APIRouter(prefix='/api', tags=['api'])
+webserver_pointer = SelfPointer()
 
 
-class Webserver(interface.WebServer):
+class Webserver:
     @inject
     def __init__(
             self,
@@ -25,14 +28,19 @@ class Webserver(interface.WebServer):
         self.host = host
         self.port = port
 
-    @api.post('increase_worker')
-    async def increase_worker(self, name: str, tags: List[str]) -> entities.Worker:
-        worker_uuid = await self.task_worker_manager_rpc.increase_worker()
+    @api.post('/increase_worker', response_model=entities.Worker)
+    @self_wrapper(webserver_pointer)
+    async def increase_worker(self, req: IncreaseWorkerReq) -> entities.Worker:
+        try:
+            worker_uuid = await self.task_worker_manager_rpc.increase_worker()
+        except interface.NoNodeException:
+            raise interface.NoNodeException(f'no task worker manager found')
+
         worker = entities.Worker(
             uuid=worker_uuid,
             status=entities.WorkerStatus.RUNNING,
-            name=name,
-            tags=tags
+            name=req.name,
+            tags=req.tags
         )
         await self.repository.add_worker(worker)
         return worker
@@ -77,4 +85,9 @@ class Webserver(interface.WebServer):
         pass
 
     def run(self):
+        webserver_pointer.set_self(self)
+
+        app = FastAPI()
+        app.include_router(api)
+
         uvicorn.run(app, host=self.host, port=self.port)

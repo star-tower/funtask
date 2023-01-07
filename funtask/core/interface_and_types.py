@@ -592,6 +592,10 @@ class LeaderScheduler:
         ...
 
 
+class NoNodeException(Exception):
+    ...
+
+
 class RPCChannelChooser(Generic[_T]):
     @abstractmethod
     def channel_node_changes(self, nodes: List[Any]):
@@ -605,79 +609,6 @@ class RPCChannelChooser(Generic[_T]):
         :type key: bytearray
         :return: rpc channel
         """
-        ...
-
-
-class WebServer:
-    @abstractmethod
-    async def increase_worker(self, name: str, tags: List[str]) -> entities.Worker:
-        ...
-
-    @abstractmethod
-    async def trigger_func(self, func: entities.Func, argument: entities.FuncArgument) -> entities.Task:
-        ...
-
-    @abstractmethod
-    async def get_task_by_uuid(self, task_uuid: entities.TaskUUID) -> entities.Task | None:
-        ...
-
-    @abstractmethod
-    async def get_tasks(
-            self,
-            tags: List[str] | None = None,
-            func: entities.FuncUUID | None = None,
-            cursor: entities.TaskQueryCursor | None = None,
-            limit: int | None = None
-    ) -> Tuple[List[entities.Task], entities.TaskQueryCursor]:
-        ...
-
-    @abstractmethod
-    async def get_funcs(
-            self,
-            tags: List[str] | None = None,
-            include_tmp: bool = False
-    ) -> List[entities.Func]:
-        ...
-
-    @abstractmethod
-    async def trigger_func_group(
-            self,
-            func_group: entities.FuncGroup,
-            argument_group: entities.FuncArgumentGroup
-    ) -> entities.TaskGroupUUID:
-        ...
-
-    @abstractmethod
-    async def add_func_group(self, func_group: entities.FuncGroup) -> entities.FuncGroupUUID:
-        ...
-
-    @abstractmethod
-    async def trigger_repeated_func(
-            self,
-            time_points: entities.TimePoint,
-            func: entities.Func,
-            argument: entities.FuncArgument
-    ) -> entities.CronTaskUUID:
-        ...
-
-    @abstractmethod
-    async def trigger_repeated_func_group(
-            self,
-            time_points: entities.TimePoint,
-            func_group: entities.FuncGroup,
-            argument_group: entities.FuncArgumentGroup
-    ) -> entities.CronTaskUUID:
-        ...
-
-    @abstractmethod
-    async def add_func(self, func: entities.Func) -> entities.FuncUUID:
-        ...
-
-    @abstractmethod
-    async def add_parameter_schema(
-            self,
-            parameter_schema: entities.ParameterSchema
-    ) -> entities.ParameterSchemaUUID:
         ...
 
 

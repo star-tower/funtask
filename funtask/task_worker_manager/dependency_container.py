@@ -28,7 +28,8 @@ class TaskWorkerManagerContainer(containers.DeclarativeContainer):
     )
     fun_task_manager = providers.Factory(
         FunTaskManager,
-        worker_manager=providers.FactoryAggregate(
+        worker_manager=providers.Selector(
+            config.manager.type,
             multiprocessing=providers.Factory(
                 MultiprocessingManager,
                 logger=logger,

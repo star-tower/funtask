@@ -32,7 +32,8 @@ class ManagerService(TaskWorkerManagerBase):
 
     async def increase_worker(self, increase_worker_request: "IncreaseWorkerRequest") -> "IncreaseWorkerResponse":
         args, kwargs = load_args(
-            increase_worker_request.other_args)  # type: ignore
+            increase_worker_request.args
+        )
         return IncreaseWorkerResponse(
             Worker((await self.fun_task_manager.increase_worker(*args, **kwargs)))
         )

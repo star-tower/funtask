@@ -5,7 +5,7 @@ from grpclib.client import Channel
 from funtask.generated import manager as task_worker_manager_rpc
 from funtask import generated as types
 from funtask.core import interface_and_types as interface, entities
-from funtask.core.interface_and_types import StatusReport
+from funtask.core.interface_and_types import StatusReport, NoNodeException
 
 
 def bytes_uuid() -> bytes:
@@ -28,6 +28,9 @@ class HashRPChooser(interface.RPCChannelChooser[Channel]):
         self.nodes = nodes
 
     async def get_channel(self, key: bytes | None = None) -> Channel:
+        if not len(self.nodes):
+            raise NoNodeException('no rpc node for channel')
+
         node_idx = hash(key) % len(self.nodes)
         node = self.nodes[node_idx]
         return Channel(host=node.host, port=node.port)
