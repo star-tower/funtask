@@ -493,6 +493,26 @@ class Repository:
         ...
 
     @abstractmethod
+    async def get_workers_from_cursor(
+            self,
+            limit: int,
+            cursor: int | None = None,
+            session=None
+    ) -> Tuple[List[entities.Worker], int] | None:
+        """
+        get n worker entities from cursor, first query cursor can be None
+
+        :param limit: number of worker
+        :type limit: int
+        :param cursor: cursor return from last query
+        :type cursor: int
+        :param session: session for query
+        :type session: any
+        :return: workers and cursor for query
+        """
+        ...
+
+    @abstractmethod
     async def get_worker_from_uuid(self, task_uuid: entities.WorkerUUID, session=None) -> entities.Task:
         ...
 

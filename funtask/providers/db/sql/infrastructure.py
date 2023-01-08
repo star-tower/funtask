@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Dict, Any, AsyncIterator, Tuple, Type, TypeVar
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncEngine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, selectinload
 from sqlalchemy.sql import select, update
 from contextlib import asynccontextmanager
 from funtask.providers.db.sql import model
@@ -80,6 +80,28 @@ class Repository(interface.Repository):
             if not result:
                 raise interface.RecordNotFoundException(f'record uuid: {uuid} of type: {t} not found')
             return result[0]
+
+    async def get_workers_from_cursor(
+            self,
+            limit: int,
+            cursor: int | None = None,
+            session: AsyncSession | None = None
+    ) -> Tuple[List[entities.Worker], int] | None:
+        async with self._ensure_session(session) as session:
+            session: AsyncSession
+            query = select(model.Worker).options(selectinload(model.Worker.tags))
+
+            if cursor:
+                query = query.where(model.Worker.id > cursor)
+
+            results = await session.execute(query.limit(limit))
+            result_models: List[model.Worker] = [result[0] for result in results]
+
+            if not result_models:
+                return None
+
+            next_cursor = max(result.id for result in result_models)
+            return [worker_model.to_entity() for worker_model in result_models], next_cursor
 
     async def get_function_from_uuid(
             self,

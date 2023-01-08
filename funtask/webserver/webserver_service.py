@@ -5,7 +5,7 @@ from dependency_injector.wiring import inject, Provide
 from fastapi import FastAPI, APIRouter
 import uvicorn
 
-from funtask.webserver.models import IncreaseWorkerReq
+from funtask.webserver.model import IncreaseWorkerReq, BatchQueryReq, WorkersWithCursor
 from funtask.webserver.utils import self_wrapper, SelfPointer
 
 api = APIRouter(prefix='/api', tags=['api'])
@@ -44,6 +44,12 @@ class Webserver:
         )
         await self.repository.add_worker(worker)
         return worker
+
+    @api.post('/get_workers', response_model=WorkersWithCursor)
+    @self_wrapper(webserver_pointer)
+    async def get_workers(self, req: BatchQueryReq):
+        workers, cursor = await self.repository.get_workers_from_cursor(req.limit, req.cursor)
+        return WorkersWithCursor(workers, cursor)
 
     async def trigger_func(self, func: entities.Func, argument: entities.FuncArgument) -> entities.Task:
         pass

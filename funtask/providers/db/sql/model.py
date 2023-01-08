@@ -1,8 +1,9 @@
-from abc import abstractmethod, ABC
+from abc import abstractmethod
 from enum import auto, unique
-from typing import List, cast, Generic, TypeVar, Protocol, Any
-from sqlalchemy import Column, Integer, String, ForeignKey, Enum, VARBINARY, Boolean, Float, BigInteger, JSON, TIMESTAMP
-from sqlalchemy.orm import declarative_base, relationship
+from typing import List, cast, Generic, TypeVar, Protocol, Any, Optional
+from sqlalchemy import Column, Integer, String, ForeignKey, Enum, VARBINARY, Boolean, Float, BigInteger, JSON, \
+    TIMESTAMP, UniqueConstraint
+from sqlalchemy.orm import declarative_base, relationship, Mapped
 
 from funtask.core import entities
 from funtask.utils.enum_utils import AutoName
@@ -57,9 +58,19 @@ class Worker(Base, EntityConvertable[entities.Worker]):
     status = Column(Enum(WorkerStatus), nullable=False)
     name = Column(String(64), nullable=True)
     last_heart_beat = Column(TIMESTAMP(), nullable=False)
+    tags: Mapped[List['Tag']] = relationship(
+        'Tag',
+        primaryjoin='Worker.uuid == foreign(Tag.related_uuid)',
+        backref='Workers'
+    )
 
     def to_entity(self) -> _T:
-        pass
+        return entities.Worker(
+            uuid=cast(entities.WorkerUUID, self.uuid),
+            status=entities.WorkerStatus(self.status.value),
+            name=self.name,
+            tags=[tag.tag for tag in self.tags]
+        )
 
 
 class ParameterSchema(Base, EntityConvertable[entities.ParameterSchema]):
@@ -67,7 +78,7 @@ class ParameterSchema(Base, EntityConvertable[entities.ParameterSchema]):
     id = Column(Integer(), primary_key=True,
                 autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False, unique=True)
-    functions: 'List[Function]'
+    functions: 'Mapped[List[Function]]'
 
     def to_entity(self) -> _T:
         return entities.ParameterSchema(
@@ -95,8 +106,8 @@ class Function(Base, EntityConvertable[entities.Func]):
     name = Column(String(64), nullable=True)
     description = Column(String(256), nullable=True)
     dependencies = Column(JSON, nullable=False)
-    ref_tasks: 'List[Task]'
-    ref_cron_tasks: 'List[CronTask]'
+    ref_tasks: 'Mapped[List[Task]]'
+    ref_cron_tasks: 'Mapped[List[CronTask]]'
 
     def to_entity(self) -> _T:
         parameter_schema = self.parameter_schema
@@ -197,6 +208,15 @@ class Tag(Base):
     related_uuid = Column(String(36), nullable=False)
     tag_type = Column(Enum(TagType), nullable=False)
 
+    uniq = UniqueConstraint(tag, related_uuid)
+
+    worker: Mapped[Optional[Worker]] = relationship(
+        'Worker',
+        foreign_keys=[related_uuid],
+        primaryjoin='foreign(Worker.uuid) == Tag.related_uuid',
+        backref='ref_tags'
+    )
+
 
 class CronTask(Base, EntityConvertable[entities.CronTask]):
     __tablename__ = 'cron_task'
@@ -253,7 +273,11 @@ class CronTask(Base, EntityConvertable[entities.CronTask]):
     timeout = Column(Float(), nullable=True)
     description = Column(String(256), nullable=True)
     disabled = Column(Boolean(), nullable=False)
-    func: Function = relationship('Function', foreign_keys=[function_id], backref="ref_corn_tasks")
+    func: Function = relationship(
+        'Function',
+        foreign_keys=[function_id],
+        backref="ref_corn_tasks"
+    )
 
     def to_entity(self) -> _T:
         pass
