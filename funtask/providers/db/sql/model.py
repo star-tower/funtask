@@ -50,15 +50,22 @@ class WithUUID(Protocol):
     uuid: Any
 
 
+class Namespace(Base):
+    __tablename__ = 'namespace'
+    id = Column(Integer(), primary_key=True, autoincrement=True, nullable=False)
+    name = Column(String(32), nullable=False)
+
+
 class Worker(Base, EntityConvertable[entities.Worker]):
     __tablename__ = 'worker'
-
     id = Column(Integer(), primary_key=True, autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False, unique=True)
-    status = Column(Enum(WorkerStatus), nullable=False)
-    name = Column(String(64), nullable=True)
-    last_heart_beat = Column(TIMESTAMP(), nullable=False)
-    tags: Mapped[List['Tag']] = relationship(
+    status = Column(Enum(WorkerStatus), nullable=False, index=True)
+    name = Column(String(64), nullable=True, index=True)
+    last_heart_beat = Column(TIMESTAMP(), nullable=False, index=True)
+    start_time = Column(TIMESTAMP(), nullable=False, index=True)
+    stop_time = Column(TIMESTAMP(), nullable=True, index=True)
+    tags: Mapped[List['TagRelation']] = relationship(
         'Tag',
         primaryjoin='Worker.uuid == foreign(Tag.related_uuid)',
         backref='Workers'
@@ -69,7 +76,7 @@ class Worker(Base, EntityConvertable[entities.Worker]):
             uuid=cast(entities.WorkerUUID, self.uuid),
             status=entities.WorkerStatus(self.status.value),
             name=self.name,
-            tags=[tag.tag for tag in self.tags]
+            tags=[tag.tag.tag_name for tag in self.tags]
         )
 
 
@@ -155,6 +162,10 @@ class Task(Base, EntityConvertable[entities.Task]):
     timeout = Column(Float(), nullable=True)
     description = Column(String(256), nullable=True)
     result = Column(String(1024), nullable=False)
+    start_time = Column(TIMESTAMP(), nullable=False, index=True)
+    stop_time = Column(TIMESTAMP(), nullable=False, index=True)
+    namespace_id = Column(Integer, ForeignKey(Namespace.id), nullable=False)
+    namespace: Namespace = relationship('Namespace')
 
     def to_entity(self) -> _T:
         pass
@@ -204,7 +215,17 @@ class TagType(AutoName):
 class Tag(Base):
     __tablename__ = 'tag'
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    tag = Column(String(32), nullable=False)
+    tag_name = Column(String(16), nullable=False)
+    parent_tag_id = Column(Integer, nullable=True, index=True)
+
+    name_parent_uniq = UniqueConstraint(tag_name, parent_tag_id)
+
+
+class TagRelation(Base):
+    __tablename__ = 'tag_relation'
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    tag_id = Column(Integer, ForeignKey('Tag.id'), nullable=False)
+    tag: Tag = relationship('Tag')
     related_uuid = Column(String(36), nullable=False)
     tag_type = Column(Enum(TagType), nullable=False)
 

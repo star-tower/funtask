@@ -28,22 +28,27 @@ class Webserver:
         self.host = host
         self.port = port
 
-    @api.post('/increase_worker', response_model=entities.Worker)
+    @api.post('/increase_worker', response_model=List[entities.Worker])
     @self_wrapper(webserver_pointer)
-    async def increase_worker(self, req: IncreaseWorkerReq) -> entities.Worker:
+    async def increase_worker(self, req: IncreaseWorkerReq) -> List[entities.Worker]:
         try:
-            worker_uuid = await self.task_worker_manager_rpc.increase_worker()
+            worker_uuids = await self.task_worker_manager_rpc.increase_workers(req.number)
         except interface.NoNodeException:
             raise interface.NoNodeException(f'no task worker manager found')
 
-        worker = entities.Worker(
-            uuid=worker_uuid,
-            status=entities.WorkerStatus.RUNNING,
-            name=req.name,
-            tags=req.tags
-        )
-        await self.repository.add_worker(worker)
-        return worker
+        worker_entities: List[entities.Worker] = []
+
+        for worker_uuid in worker_uuids:
+            worker = entities.Worker(
+                uuid=worker_uuid,
+                status=entities.WorkerStatus.RUNNING,
+                name=req.name,
+                tags=req.tags
+            )
+            await self.repository.add_worker(worker)
+
+            worker_entities.append(worker)
+        return worker_entities
 
     @api.post('/get_workers', response_model=WorkersWithCursor)
     @self_wrapper(webserver_pointer)

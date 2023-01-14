@@ -171,6 +171,7 @@ class Repository(interface.Repository):
 
     async def add_worker(self, worker: entities.Worker, session: AsyncSession | None = None):
         async with self._ensure_session(session) as session:
+            # TODO: tag process
             session: AsyncSession
             session.add(model.Worker(
                 uuid=worker.uuid,
@@ -308,9 +309,9 @@ class Repository(interface.Repository):
         async with self._ensure_session(session) as session:
             session: AsyncSession
             workers = await session.execute(select(model.Worker).join(
-                model.Tag, model.Worker.uuid == model.Tag.related_uuid
+                model.TagRelate, model.Worker.uuid == model.TagRelate.related_uuid
             ).where(
-                model.Tag.tag_type == 'worker'
+                model.TagRelate.tag_type == 'worker'
             ))
             workers: List[Tuple[model.Worker]]
             return [worker[0].to_entity() for worker in workers]
