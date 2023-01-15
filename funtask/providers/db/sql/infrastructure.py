@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import List, Dict, Any, AsyncIterator, Tuple, Type, TypeVar
 
+from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncEngine
 from sqlalchemy.orm import sessionmaker, selectinload
 from sqlalchemy.sql import select, update
@@ -309,9 +310,9 @@ class Repository(interface.Repository):
         async with self._ensure_session(session) as session:
             session: AsyncSession
             workers = await session.execute(select(model.Worker).join(
-                model.TagRelate, model.Worker.uuid == model.TagRelate.related_uuid
+                model.TagRelation, model.Worker.uuid == model.TagRelation.related_uuid
             ).where(
-                model.TagRelate.tag_type == 'worker'
+                model.TagRelation.tag_type == 'worker'
             ))
             workers: List[Tuple[model.Worker]]
             return [worker[0].to_entity() for worker in workers]
@@ -323,3 +324,6 @@ class Repository(interface.Repository):
     async def create_model_schema(self):
         async with self.engine.begin() as conn:
             await conn.run_sync(model.Base.metadata.create_all)
+            await conn.execute(
+                insert(model.Namespace).values(name='default')
+            )

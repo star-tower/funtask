@@ -1,5 +1,5 @@
 from funtask.core import entities
-from typing import List, Dict
+from typing import List
 
 from pydantic.dataclasses import dataclass
 
@@ -8,7 +8,7 @@ from pydantic.dataclasses import dataclass
 class IncreaseWorkerReq:
     name: str | None
     number: int
-    tags: List[Dict[str, str] | str]
+    tags: List[entities.Tag]
 
 
 @dataclass

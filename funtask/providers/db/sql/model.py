@@ -53,10 +53,10 @@ class WithUUID(Protocol):
 class Namespace(Base):
     __tablename__ = 'namespace'
     id = Column(Integer(), primary_key=True, autoincrement=True, nullable=False)
-    name = Column(String(32), nullable=False)
+    name = Column(String(32), nullable=False, unique=True)
 
 
-class Worker(Base, EntityConvertable[entities.Worker]):
+class Worker(Base):
     __tablename__ = 'worker'
     id = Column(Integer(), primary_key=True, autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False, unique=True)
@@ -65,7 +65,7 @@ class Worker(Base, EntityConvertable[entities.Worker]):
     last_heart_beat = Column(TIMESTAMP(), nullable=False, index=True)
     start_time = Column(TIMESTAMP(), nullable=False, index=True)
     stop_time = Column(TIMESTAMP(), nullable=True, index=True)
-    tags: Mapped[List['TagRelation']] = relationship(
+    tags: List['TagRelation'] = relationship(
         'Tag',
         primaryjoin='Worker.uuid == foreign(Tag.related_uuid)',
         backref='Workers'
@@ -76,16 +76,16 @@ class Worker(Base, EntityConvertable[entities.Worker]):
             uuid=cast(entities.WorkerUUID, self.uuid),
             status=entities.WorkerStatus(self.status.value),
             name=self.name,
-            tags=[tag.tag.tag_name for tag in self.tags]
+            tags=TagRelation.tag_relations2entities(self.tags)
         )
 
 
-class ParameterSchema(Base, EntityConvertable[entities.ParameterSchema]):
+class ParameterSchema(Base):
     __tablename__ = 'parameter_schema'
     id = Column(Integer(), primary_key=True,
                 autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False, unique=True)
-    functions: 'Mapped[List[Function]]'
+    functions: List['Function']
 
     def to_entity(self) -> _T:
         return entities.ParameterSchema(
@@ -93,7 +93,7 @@ class ParameterSchema(Base, EntityConvertable[entities.ParameterSchema]):
         )
 
 
-class Function(Base, EntityConvertable[entities.Func]):
+class Function(Base):
     __tablename__ = 'function'
     id = Column(BigInteger, primary_key=True,
                 autoincrement=True, nullable=False)
@@ -111,10 +111,11 @@ class Function(Base, EntityConvertable[entities.Func]):
     )
     function = Column(VARBINARY(1024), nullable=False)
     name = Column(String(64), nullable=True)
+    namespace_id = Column(Integer, ForeignKey('namespace.id'), nullable=False)
     description = Column(String(256), nullable=True)
     dependencies = Column(JSON, nullable=False)
-    ref_tasks: 'Mapped[List[Task]]'
-    ref_cron_tasks: 'Mapped[List[CronTask]]'
+    ref_tasks: List['Task']
+    ref_cron_tasks: List['CronTask']
 
     def to_entity(self) -> _T:
         parameter_schema = self.parameter_schema
@@ -131,7 +132,7 @@ class Function(Base, EntityConvertable[entities.Func]):
         )
 
 
-class Argument(Base, EntityConvertable[entities.FuncArgument]):
+class Argument(Base):
     __tablename__ = 'argument'
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, nullable=False)
@@ -143,7 +144,7 @@ class Argument(Base, EntityConvertable[entities.FuncArgument]):
         pass
 
 
-class Task(Base, EntityConvertable[entities.Task]):
+class Task(Base):
     __tablename__ = 'task'
 
     id = Column(BigInteger, primary_key=True,
@@ -207,9 +208,9 @@ class QueueFullStrategy(AutoName):
 
 @unique
 class TagType(AutoName):
-    CronTask = auto()
-    Worker = auto()
-    function = auto()
+    CRON_TASK = auto()
+    WORKER = auto()
+    FUNCTION = auto()
 
 
 class Tag(Base):
@@ -217,19 +218,21 @@ class Tag(Base):
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     tag_name = Column(String(16), nullable=False)
     parent_tag_id = Column(Integer, nullable=True, index=True)
+    namespace_id = Column(Integer, ForeignKey('namespace.id'), nullable=False)
+    namespace: Namespace = relationship(Namespace)
+    tag_type = Column(Enum(TagType), nullable=False)
 
-    name_parent_uniq = UniqueConstraint(tag_name, parent_tag_id)
+    name_parent_uniq = UniqueConstraint(tag_type, tag_name, parent_tag_id)
 
 
 class TagRelation(Base):
     __tablename__ = 'tag_relation'
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    tag_id = Column(Integer, ForeignKey('Tag.id'), nullable=False)
-    tag: Tag = relationship('Tag')
+    tag_id = Column(Integer, ForeignKey('tag.id'), nullable=False)
+    tag: Tag = relationship(Tag)
     related_uuid = Column(String(36), nullable=False)
-    tag_type = Column(Enum(TagType), nullable=False)
 
-    uniq = UniqueConstraint(tag, related_uuid)
+    uniq = UniqueConstraint(tag_id, related_uuid)
 
     worker: Mapped[Optional[Worker]] = relationship(
         'Worker',
@@ -238,8 +241,22 @@ class TagRelation(Base):
         backref='ref_tags'
     )
 
+    @staticmethod
+    def tag_relations2entities(tag_relations: List['TagRelation']) -> List[entities.Tag]:
+        parent_tag2name_map = {
+            tag_relation.tag.id: tag_relation.tag.tag_name for tag_relation in tag_relations
+            if tag_relation.tag.parent_tag_id is None
+        }
+        return [
+            entities.Tag(
+                key=parent_tag2name_map[tag_relation.tag.parent_tag_id],
+                value=tag_relation.tag.tag_name,
+                namespace=tag_relation.tag.namespace.name
+            ) for tag_relation in tag_relations if tag_relation.tag.parent_tag_id is not None
+        ]
 
-class CronTask(Base, EntityConvertable[entities.CronTask]):
+
+class CronTask(Base):
     __tablename__ = 'cron_task'
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False, unique=True)

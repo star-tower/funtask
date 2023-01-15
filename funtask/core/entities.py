@@ -210,8 +210,15 @@ class WorkerStatus(AutoName):
 
 
 @dataclass
+class Tag:
+    key: str
+    value: str | None
+    namespace: str
+
+
+@dataclass
 class Worker:
     uuid: WorkerUUID
     status: WorkerStatus
     name: str | None = None
-    tags: List[str] = field(default_factory=list)
+    tags: List[Tag] = field(default_factory=list)
