@@ -66,8 +66,8 @@ class Worker(Base):
     start_time = Column(TIMESTAMP(), nullable=False, index=True)
     stop_time = Column(TIMESTAMP(), nullable=True, index=True)
     tags: List['TagRelation'] = relationship(
-        'Tag',
-        primaryjoin='Worker.uuid == foreign(Tag.related_uuid)',
+        'TagRelation',
+        primaryjoin='Worker.uuid == foreign(TagRelation.related_uuid)',
         backref='Workers'
     )
 
@@ -237,7 +237,7 @@ class TagRelation(Base):
     worker: Mapped[Optional[Worker]] = relationship(
         'Worker',
         foreign_keys=[related_uuid],
-        primaryjoin='foreign(Worker.uuid) == Tag.related_uuid',
+        primaryjoin='foreign(Worker.uuid) == TagRelation.related_uuid',
         backref='ref_tags'
     )
 

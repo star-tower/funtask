@@ -1,3 +1,5 @@
+from pydantic import Field
+
 from funtask.core import entities
 from typing import List
 
@@ -6,15 +8,15 @@ from pydantic.dataclasses import dataclass
 
 @dataclass
 class IncreaseWorkerReq:
-    name: str | None
     number: int
     tags: List[entities.Tag]
+    name: str | None = Field(nullable=True)
 
 
 @dataclass
 class BatchQueryReq:
-    cursor: int | None
     limit: int
+    cursor: int | None = Field(nullable=True)
 
 
 @dataclass

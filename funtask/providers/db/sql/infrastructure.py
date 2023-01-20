@@ -178,7 +178,8 @@ class Repository(interface.Repository):
                 uuid=worker.uuid,
                 status=worker.status.value,
                 name=worker.name,
-                last_heart_beat=datetime.now()
+                last_heart_beat=datetime.now(),
+                start_time=datetime.now()
             ))
 
     async def get_worker_from_uuid(self, task_uuid: entities.WorkerUUID,
