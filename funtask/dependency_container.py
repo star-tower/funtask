@@ -9,13 +9,13 @@ class DependencyContainer(containers.DeclarativeContainer):
     config = providers.Configuration()
     task_worker_manager = providers.Container(
         TaskWorkerManagerContainer,
-        config=config.task_worker_manager,
+        config=config.config[config.scope]
     )
     scheduler = providers.Container(
         SchedulerContainer,
-        config=config.scheduler
+        config=config.config[config.scope]
     )
     webserver = providers.Container(
         WebServerContainer,
-        config=config.webserver
+        config=config.config[config.scope]
     )

@@ -2,7 +2,7 @@ import sys
 import time
 
 import fire as fire
-from funtask.core import scheduler
+from funtask.scheduler.scheduler_service import SchedulerServiceRunner
 from funtask.webserver import webserver_service
 from funtask.dependency_container import DependencyContainer
 from loguru import logger
@@ -34,9 +34,12 @@ def load_config(config_path: str, container: DependencyContainer):
             raise FormatException(f'cannot parse config format "{format_}"')
 
 
-def gen_container(config_path: str) -> DependencyContainer:
+def gen_container(config_path: str, scope: str) -> DependencyContainer:
     container = DependencyContainer()
     logger.info("loading config '{config}'", config=config_path)
+    container.config.from_dict({
+        'scope': scope
+    })
     load_config(config_path, container)
     return container
 
@@ -45,7 +48,7 @@ class TaskWorkerManager:
     @staticmethod
     @logger.catch
     async def run(config: str):
-        container = gen_container(config)
+        container = gen_container(config, 'task_worker_manager')
         container.wire(modules=[
             'funtask.task_worker_manager.manager_service'
         ])
@@ -56,13 +59,24 @@ class TaskWorkerManager:
 class Scheduler:
     @staticmethod
     @logger.catch
-    async def run(config: str):
-        container = gen_container(config)
+    async def run(
+            config: str,
+            scope: str | None = None
+    ):
+        """
+        run a scheduler according to config
+        :param config: config file path
+        :type config: str
+        :param scope: config scope in config file, for same config contains multiple config
+        :type scope: str
+        """
+        container = gen_container(config, scope or 'scheduler')
+
         container.wire(modules=[
             'funtask.scheduler.scheduler_service',
             'funtask.core.scheduler'
         ])
-        s = scheduler.Scheduler()
+        s = SchedulerServiceRunner()
         await s.run()
 
 
@@ -70,7 +84,7 @@ class WebServer:
     @staticmethod
     @logger.catch
     def run(config: str):
-        container = gen_container(config)
+        container = gen_container(config, 'webserver')
         container.wire(modules=[
             'funtask.webserver.webserver_service'
         ])
@@ -99,7 +113,7 @@ class Funtask:
         # user agree
         # init
         logger.info('preparing...')
-        container = gen_container(config)
+        container = gen_container(config, 'webserver')
         repo = container.webserver().repository()
 
         # drop all table

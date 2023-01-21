@@ -3,14 +3,15 @@ from dataclasses import field
 from enum import unique, auto
 from typing import NewType, TypeVar, List, Any, Dict, Optional, Union
 
+from pydantic import Field
 from pydantic.dataclasses import dataclass
 
 from funtask.utils.enum_utils import AutoName
 
+dataclass = dataclass(eq=True, frozen=True)
+
 TaskUUID = NewType("TaskUUID", str)
-
 WorkerUUID = NewType("WorkerUUID", str)
-
 FuncGroupUUID = NewType("FuncGroupUUID", str)
 TaskGroupUUID = NewType("TaskGroupUUID", str)
 CronTaskUUID = NewType("CronTaskUUID", str)
@@ -180,10 +181,10 @@ class QueueFullStrategy(AutoName):
 
 @dataclass
 class QueueStrategy:
-    max_size = math.inf
     full_strategy: QueueFullStrategy
     udf: Func
     udf_extra: Dict[str, Any] | None
+    max_size: float = math.inf
 
 
 _T = TypeVar('_T')
@@ -212,8 +213,8 @@ class WorkerStatus(AutoName):
 @dataclass
 class Tag:
     key: str
-    value: str | None
     namespace: str
+    value: str | None = Field(nullable=True)
 
 
 @dataclass

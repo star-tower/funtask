@@ -83,11 +83,11 @@ class ManagerServiceRunner:
     def __init__(
             self,
             fun_task_manager: FunTaskManager = Provide['task_worker_manager.fun_task_manager'],
-            address: str = Provide['task_worker_manager.rpc.address'],
+            host: str = Provide['task_worker_manager.rpc.host'],
             port: int = Provide['task_worker_manager.rpc.port']
     ):
         self.fun_task_manager = fun_task_manager
-        self.address = address
+        self.host = host
         self.port = port
 
     async def run(self):
@@ -95,10 +95,10 @@ class ManagerServiceRunner:
             self.fun_task_manager
         )])
         logger.opt(colors=True).info(
-            "starting grpc service <cyan>{address}:{port}</cyan>",
-            address=self.address,
+            "starting grpc service <cyan>{host}:{port}</cyan>",
+            host=self.host,
             port=self.port
         )
-        await server.start(self.address, self.port)
+        await server.start(self.host, self.port)
         logger.info("service start successful")
         await server.wait_closed()

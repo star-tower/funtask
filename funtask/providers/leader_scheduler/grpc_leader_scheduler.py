@@ -9,12 +9,12 @@ from funtask.core import interface_and_types as interface, entities
 
 
 @lru_cache(256)
-def _gen_stub(node: entities.SchedulerNode) -> scheduler_rpc.LeaderSchedulerStub:
+def _gen_stub(node: entities.SchedulerNode) -> scheduler_rpc.SchedulerStub:
     channel = Channel(
         host=node.host,
         port=node.port
     )
-    return scheduler_rpc.LeaderSchedulerStub(channel)
+    return scheduler_rpc.SchedulerStub(channel)
 
 
 def _datetime2ms_timestamp(t: datetime) -> int:

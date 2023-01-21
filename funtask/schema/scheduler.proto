@@ -17,7 +17,7 @@ message RemoveTaskRequest {
   uint64 start_ms_timestamp = 2;
 }
 
-service LeaderScheduler {
+service Scheduler {
   rpc AssignTask(AssignTaskRequest) returns (Empty);
   rpc GetTaskList(Empty) returns (GetTaskListResponse);
   rpc RemoveTask(RemoveTaskRequest) returns (Empty);

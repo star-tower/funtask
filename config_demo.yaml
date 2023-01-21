@@ -1,48 +1,87 @@
-task_worker_manager:
-  logger:
-    type: std
-  queue:
-    task:
+config:
+  task_worker_manager:
+    logger:
+      type: std
+    queue:
+      task:
+        type: multiprocessing
+      task_status:
+        type: multiprocessing
+      control:
+        type: multiprocessing
+    manager:
       type: multiprocessing
-    task_status:
+    rpc:
+      host: 0.0.0.0
+      port: 2333
+
+  worker-scheduler:
+    curr_node:
+      uuid: worker
+      host: localhost
+      port: 2336
+    rpc_chooser:
+      type: hash
+    cron_scheduler:
+      type: schedule
+    argument_queue:
+      type: multiprocessing
+    lock:
       type: multiprocessing
     control:
       type: multiprocessing
-  manager:
-    type: multiprocessing
-  rpc:
-    address: 0.0.0.0
-    port: 2333
+      leader_node:
+        uuid: leader
+        host: localhost
+        port: 2334
+      worker_nodes:
+        - uuid: worker
+          host: localhost
+          port: 2336
+    as_leader:
+      rebalanced_frequency:
+        second: 1
+    as_worker:
+      max_sync_process_queue_number: 1000
 
-scheduler:
-  curr_node:
-    uuid: abcd
-    host: localhost
-    port: 2333
-  rpc_chooser:
-    type: hash
-  cron_scheduler:
-    type: schedule
-  argument_queue:
-    type: multiprocessing
-  lock:
-    type: multiprocessing
-  control:
-    type: multiprocessing
-    leader_node:
-      uuid: aaaa
+  leader-scheduler:
+    curr_node:
+      uuid: leader
       host: localhost
       port: 2334
-
-webserver:
-  rpc_chooser:
-    type: hash
-  repository:
-    uri: mysql+aiomysql://root:zqqqqz2000@127.0.0.1:3306/funtask
-  service:
-    host: localhost
-    port: 2335
-  task_worker_manager_nodes:
-      - uuid: uuid1
+    rpc_chooser:
+      type: hash
+    cron_scheduler:
+      type: schedule
+    argument_queue:
+      type: multiprocessing
+    lock:
+      type: multiprocessing
+    control:
+      type: multiprocessing
+      leader_node:
+        uuid: leader
         host: localhost
-        port: 2333
+        port: 2334
+      worker_nodes:
+        - uuid: worker
+          host: localhost
+          port: 2336
+    as_leader:
+      rebalanced_frequency:
+        second: 1
+    as_worker:
+      max_sync_process_queue_number: 1000
+
+  webserver:
+    rpc_chooser:
+      type: hash
+    repository:
+      uri: mysql+aiomysql://root:zqqqqz2000@127.0.0.1:3306/funtask
+    service:
+      host: localhost
+      port: 2335
+    task_worker_manager_nodes:
+        - uuid: uuid1
+          host: localhost
+          port: 2333

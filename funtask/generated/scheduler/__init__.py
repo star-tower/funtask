@@ -39,7 +39,7 @@ class RemoveTaskRequest(betterproto.Message):
     start_ms_timestamp: int = betterproto.uint64_field(2)
 
 
-class LeaderSchedulerStub(betterproto.ServiceStub):
+class SchedulerStub(betterproto.ServiceStub):
     async def assign_task(
         self,
         assign_task_request: "AssignTaskRequest",
@@ -49,7 +49,7 @@ class LeaderSchedulerStub(betterproto.ServiceStub):
         metadata: Optional["MetadataLike"] = None
     ) -> "_Empty__":
         return await self._unary_unary(
-            "/scheduler.LeaderScheduler/AssignTask",
+            "/scheduler.Scheduler/AssignTask",
             assign_task_request,
             _Empty__,
             timeout=timeout,
@@ -66,7 +66,7 @@ class LeaderSchedulerStub(betterproto.ServiceStub):
         metadata: Optional["MetadataLike"] = None
     ) -> "GetTaskListResponse":
         return await self._unary_unary(
-            "/scheduler.LeaderScheduler/GetTaskList",
+            "/scheduler.Scheduler/GetTaskList",
             empty,
             GetTaskListResponse,
             timeout=timeout,
@@ -83,7 +83,7 @@ class LeaderSchedulerStub(betterproto.ServiceStub):
         metadata: Optional["MetadataLike"] = None
     ) -> "_Empty__":
         return await self._unary_unary(
-            "/scheduler.LeaderScheduler/RemoveTask",
+            "/scheduler.Scheduler/RemoveTask",
             remove_task_request,
             _Empty__,
             timeout=timeout,
@@ -92,7 +92,7 @@ class LeaderSchedulerStub(betterproto.ServiceStub):
         )
 
 
-class LeaderSchedulerBase(ServiceBase):
+class SchedulerBase(ServiceBase):
     async def assign_task(self, assign_task_request: "AssignTaskRequest") -> "_Empty__":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
@@ -125,19 +125,19 @@ class LeaderSchedulerBase(ServiceBase):
 
     def __mapping__(self) -> Dict[str, grpclib.const.Handler]:
         return {
-            "/scheduler.LeaderScheduler/AssignTask": grpclib.const.Handler(
+            "/scheduler.Scheduler/AssignTask": grpclib.const.Handler(
                 self.__rpc_assign_task,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 AssignTaskRequest,
                 _Empty__,
             ),
-            "/scheduler.LeaderScheduler/GetTaskList": grpclib.const.Handler(
+            "/scheduler.Scheduler/GetTaskList": grpclib.const.Handler(
                 self.__rpc_get_task_list,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 _Empty__,
                 GetTaskListResponse,
             ),
-            "/scheduler.LeaderScheduler/RemoveTask": grpclib.const.Handler(
+            "/scheduler.Scheduler/RemoveTask": grpclib.const.Handler(
                 self.__rpc_remove_task,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 RemoveTaskRequest,

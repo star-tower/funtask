@@ -7,6 +7,7 @@ from typing import List, Dict, Any, cast
 import dill
 from dependency_injector.wiring import inject, Provide
 from loguru import logger
+from pydantic import Extra
 from pydantic.dataclasses import dataclass
 
 from funtask.core import interface_and_types as interface
@@ -493,6 +494,8 @@ class LeaderScheduler(interface.LeaderScheduler):
         assert self.nodes is not None and self.node_responsible_tasks_dict is not None, ValueError(
             'internal error for nodes or responsible dict should not be none'
         )
+        if len(self.nodes) == 1:
+            return
         for node, tasks in self.node_responsible_tasks_dict.items():
             for task_uuid in tasks:
                 await self.worker_scheduler_rpc.remove_task_from_node(node, task_uuid, rebalanced_date)
@@ -504,19 +507,33 @@ class LeaderScheduler(interface.LeaderScheduler):
 
 
 @dataclass
+class Timedelta:
+    seconds: int = 0
+    days: int = 0
+    microseconds: int = 0
+    minutes: int = 0
+
+    def to_delta(self) -> timedelta:
+        return timedelta(**asdict(self))
+
+
+@dataclass
 class LeaderSchedulerConfig:
-    rebalanced_frequency: timedelta
+    rebalanced_frequency: Timedelta
 
 
 @dataclass
 class WorkerSchedulerConfig:
-    ...
+    max_sync_process_queue_number: int
 
 
 @dataclass
 class SchedulerConfig:
-    leader_scheduler: LeaderSchedulerConfig
-    worker_scheduler: WorkerSchedulerConfig
+    as_leader: LeaderSchedulerConfig
+    as_worker: WorkerSchedulerConfig
+
+    class Config:
+        extra = Extra.ignore
 
 
 class Scheduler:
@@ -531,9 +548,9 @@ class Scheduler:
             lock: interface.DistributeLock = Provide['scheduler.lock'],
             leader_scheduler_rpc: interface.LeaderSchedulerRPC = Provide['scheduler.leader_scheduler_rpc'],
             leader_control: interface.LeaderSchedulerControl = Provide['scheduler.leader_control'],
-            scheduler_config: SchedulerConfig = Provide['scheduler.config'],
+            scheduler_config: Dict = Provide['scheduler.config'],
     ):
-        self.scheduler_config = scheduler_config
+        self.scheduler_config = SchedulerConfig(**scheduler_config)
         self.self_node = self_node
         self.leader_control = leader_control
         self.leader_scheduler = LeaderScheduler(
@@ -557,12 +574,12 @@ class Scheduler:
             leader = await self.leader_control.get_leader()
             if leader is not None and leader.uuid == self.self_node.uuid:
                 # if is leader scheduler and worker schedulers need rebalance
-                if datetime.now() - leader_last_rebalanced_time > self.scheduler_config.leader_scheduler. \
-                        rebalanced_frequency:
+                if datetime.now() - leader_last_rebalanced_time > self.scheduler_config.as_leader. \
+                        rebalanced_frequency.to_delta():
                     leader_last_rebalanced_time = datetime.now()
                     await self.leader_scheduler.rebalance(
                         leader_last_rebalanced_time +
-                        self.scheduler_config.leader_scheduler.rebalanced_frequency / 2
+                        self.scheduler_config.as_leader.rebalanced_frequency.to_delta() / 2
                     )
                 # is worker scheduler
                 else:
@@ -570,7 +587,7 @@ class Scheduler:
                     i = 0
                     async for status_report in status_report_iter:
                         i += 1
-                        if status_report is None or i >= 1000:
+                        if status_report is None or i >= self.scheduler_config.as_worker.max_sync_process_queue_number:
                             break
                         await self.worker_scheduler.process_new_status(status_report)
             else:

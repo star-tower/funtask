@@ -1,14 +1,22 @@
+from typing import Dict, List
+
 from dependency_injector import containers, providers
 
+from funtask.core.scheduler import Scheduler
 from funtask.providers.leader_scheduler.grpc_leader_scheduler import GRPCLeaderScheduler
 from funtask.providers.leader_scheduler_control.multiprocessing_control import MultiprocessingSchedulerControl
-from funtask.scheduler.scheduler_service import SchedulerService
 from funtask.core import entities
 from funtask.providers.cron.schedule_cron import SchedulerCron
 from funtask.providers.queue.multiprocessing_queue import MultiprocessingQueueFactory
 from funtask.providers.lock.multiprocessing_lock import MultiprocessingLock
 from funtask.providers.db.sql import infrastructure
 from funtask.task_worker_manager import manager_rpc_client
+
+
+def generate_nodes(nodes: List[Dict]) -> List[entities.SchedulerNode]:
+    return [entities.SchedulerNode(
+        **node
+    ) for node in nodes]
 
 
 class SchedulerContainer(containers.DeclarativeContainer):
@@ -61,9 +69,13 @@ class SchedulerContainer(containers.DeclarativeContainer):
                 port=config.control.leader_node.port,
                 host=config.control.leader_node.host,
                 uuid=config.control.leader_node.uuid,
+            ),
+            worker_nodes=providers.Factory(
+                generate_nodes,
+                config.control.worker_nodes
             )
         )
     )
     scheduler = providers.Singleton(
-        SchedulerService
+        Scheduler
     )
