@@ -581,15 +581,13 @@ class Scheduler:
                         leader_last_rebalanced_time +
                         self.scheduler_config.as_leader.rebalanced_frequency.to_delta() / 2
                     )
-                # is worker scheduler
-                else:
-                    status_report_iter = await self.task_manager_rpc.get_queued_status(0.01)
-                    i = 0
-                    async for status_report in status_report_iter:
-                        i += 1
-                        if status_report is None or i >= self.scheduler_config.as_worker.max_sync_process_queue_number:
-                            break
-                        await self.worker_scheduler.process_new_status(status_report)
+            # is worker scheduler
             else:
+                i = 0
+                async for status_report in self.task_manager_rpc.get_queued_status(0.01):
+                    i += 1
+                    if status_report is None or i >= self.scheduler_config.as_worker.max_sync_process_queue_number:
+                        break
+                    await self.worker_scheduler.process_new_status(status_report)
                 await self.leader_control.elect_leader(self.self_node.uuid)
             await asyncio.sleep(.1)

@@ -12,15 +12,16 @@ config:
     manager:
       type: multiprocessing
     rpc:
-      host: 0.0.0.0
+      host: localhost
       port: 2333
+      uuid: manager
 
   worker-scheduler:
     curr_node:
       uuid: worker
       host: localhost
       port: 2336
-    rpc_chooser:
+    rpc_selector:
       type: hash
     cron_scheduler:
       type: schedule
@@ -28,8 +29,14 @@ config:
       type: multiprocessing
     lock:
       type: multiprocessing
-    control:
-      type: multiprocessing
+    manager_control:
+      type: static
+      nodes:
+        - host: localhost
+          port: 2333
+          uuid: manager
+    scheduler_control:
+      type: static
       leader_node:
         uuid: leader
         host: localhost
@@ -49,7 +56,13 @@ config:
       uuid: leader
       host: localhost
       port: 2334
-    rpc_chooser:
+    manager_control:
+      type: static
+      nodes:
+        - host: localhost
+          port: 2333
+          uuid: manager
+    rpc_selector:
       type: hash
     cron_scheduler:
       type: schedule
@@ -57,8 +70,8 @@ config:
       type: multiprocessing
     lock:
       type: multiprocessing
-    control:
-      type: multiprocessing
+    scheduler_control:
+      type: static
       leader_node:
         uuid: leader
         host: localhost
@@ -74,14 +87,16 @@ config:
       max_sync_process_queue_number: 1000
 
   webserver:
-    rpc_chooser:
+    rpc_selector:
       type: hash
     repository:
       uri: mysql+aiomysql://root:zqqqqz2000@127.0.0.1:3306/funtask
     service:
       host: localhost
       port: 2335
-    task_worker_manager_nodes:
-        - uuid: uuid1
+    manager_control:
+      type: static
+      nodes:
+        - uuid: selector
           host: localhost
           port: 2333

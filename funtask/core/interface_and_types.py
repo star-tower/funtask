@@ -48,7 +48,7 @@ class KVDB:
 
     @abstractmethod
     async def foreach(self, key: str) -> AsyncIterator[bytes]:
-        ...
+        yield
 
     @abstractmethod
     async def push(self, key: str, *value: bytes):
@@ -341,7 +341,7 @@ class FunTaskManagerRPC:
         timeout is not None and timeout: return None
         queue not empty: iterator
         """
-        ...
+        yield
 
     @abstractmethod
     async def get_task_queue_size(self, worker: entities.WorkerUUID) -> int:
@@ -616,7 +616,7 @@ class NoNodeException(Exception):
     ...
 
 
-class RPCChannelChooser(Generic[_T]):
+class RPCChannelSelector(Generic[_T]):
     @abstractmethod
     def channel_node_changes(self, nodes: List[Any]):
         ...

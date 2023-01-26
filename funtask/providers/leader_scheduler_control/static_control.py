@@ -3,7 +3,7 @@ from typing import List, cast
 from funtask.core import interface_and_types as interface, entities
 
 
-class MultiprocessingSchedulerControl(interface.LeaderSchedulerControl):
+class StaticSchedulerControl(interface.LeaderSchedulerControl):
     def __init__(
             self,
             leader_node: entities.SchedulerNode,

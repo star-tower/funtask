@@ -1,16 +1,10 @@
-from typing import List, Dict, cast
 from dependency_injector import containers, providers
-from funtask.core import entities
+
+from funtask.common.common import list_dict2nodes
+from funtask.providers.manager_control.static_control import StaticManagerControl
+from funtask.providers.rpc_selector.hash_selector import HashRPSelector
 from funtask.task_worker_manager import manager_rpc_client
 from funtask.providers.db.sql.infrastructure import Repository
-
-
-def nodes_generator(nodes: List[Dict[str, str | int]]):
-    return [entities.TaskWorkerManagerNode(
-        uuid=cast(entities.TaskWorkerManagerNodeUUID, node['uuid']),
-        host=node['host'],
-        port=node['port']
-    ) for node in nodes]
 
 
 class WebServerContainer(containers.DeclarativeContainer):
@@ -19,18 +13,25 @@ class WebServerContainer(containers.DeclarativeContainer):
         Repository,
         uri=config.repository.uri
     )
-    rpc_chooser = providers.Selector(
-        config.rpc_chooser.type,
+    rpc_selector = providers.Selector(
+        config.rpc_selector.type,
         hash=providers.Singleton(
-            manager_rpc_client.HashRPChooser,
+            HashRPSelector
+        )
+    )
+    manager_control = providers.Selector(
+        config.manager_control.type,
+        static=providers.Singleton(
+            StaticManagerControl,
             nodes=providers.Factory(
-                nodes_generator,
-                config.task_worker_manager_nodes
+                list_dict2nodes,
+                config.manager_control.nodes
             )
         )
     )
     manager_rpc = providers.Singleton(
         manager_rpc_client.ManagerRPCClient,
-        rpc_chooser=rpc_chooser
+        rpc_selector=rpc_selector,
+        manager_control=manager_control
     )
     service = config.service

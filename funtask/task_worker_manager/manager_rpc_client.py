@@ -1,104 +1,122 @@
+import asyncio
+import time
 from typing import List, cast, AsyncIterator
 from uuid import uuid4
 from grpclib.client import Channel
+from asyncio.exceptions import TimeoutError as AsyncTimeoutError
+import contextlib
 
 from funtask.generated import manager as task_worker_manager_rpc
+from funtask.generated import Empty
 from funtask import generated as types
 from funtask.core import interface_and_types as interface, entities
-from funtask.core.interface_and_types import StatusReport, NoNodeException
+from funtask.core.interface_and_types import StatusReport
 
 
 def bytes_uuid() -> bytes:
     return uuid4().hex.encode()
 
 
+@contextlib.asynccontextmanager
 async def get_rpc(
-        chooser: interface.RPCChannelChooser[Channel],
+        selector: interface.RPCChannelSelector[Channel],
         key: bytes | None = None
 ) -> task_worker_manager_rpc.TaskWorkerManagerStub:
-    channel = await chooser.get_channel(key)
-    return task_worker_manager_rpc.TaskWorkerManagerStub(channel)
-
-
-class HashRPChooser(interface.RPCChannelChooser[Channel]):
-    def __init__(self, nodes: List[entities.TaskWorkerManagerNode | entities.SchedulerNode]):
-        self.nodes = nodes
-
-    def channel_node_changes(self, nodes: List[entities.TaskWorkerManagerNode | entities.SchedulerNode]):
-        self.nodes = nodes
-
-    async def get_channel(self, key: bytes | None = None) -> Channel:
-        if not len(self.nodes):
-            raise NoNodeException('no rpc node for channel')
-
-        node_idx = hash(key) % len(self.nodes)
-        node = self.nodes[node_idx]
-        return Channel(host=node.host, port=node.port)
+    channel = await selector.get_channel(key)
+    try:
+        yield task_worker_manager_rpc.TaskWorkerManagerStub(channel)
+    except Exception as e:
+        raise e
+    finally:
+        channel.close()
 
 
 class ManagerRPCClient(interface.FunTaskManagerRPC):
-    def __init__(self, rpc_chooser: interface.RPCChannelChooser[Channel]):
-        self.rpc_chooser = rpc_chooser
+    def __init__(
+            self,
+            rpc_selector: interface.RPCChannelSelector[Channel],
+            manager_control: interface.ManagerNodeControl
+    ):
+        self.rpc_selector = rpc_selector
+        self.node_update_lock = asyncio.Lock()
+        self.latest_selector_node_update = -1
+        self.manager_control = manager_control
+
+    async def update_selector_nodes(self):
+        async with self.node_update_lock:
+            curr_time = time.time()
+            if self.latest_selector_node_update < curr_time - 1:
+                nodes = await self.manager_control.get_all_nodes()
+                self.rpc_selector.channel_node_changes(nodes)
+                self.latest_selector_node_update = curr_time
 
     async def increase_workers(self, number: int | None = None) -> List[entities.WorkerUUID]:
-        rpc = await get_rpc(self.rpc_chooser, bytes_uuid())
-        res = await rpc.increase_workers(task_worker_manager_rpc.IncreaseWorkersRequest(number))
-        return [cast(entities.WorkerUUID, worker.uuid) for worker in res.workers]
+        await self.update_selector_nodes()
+        async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
+            res = await rpc.increase_workers(task_worker_manager_rpc.IncreaseWorkersRequest(number))
+            return [cast(entities.WorkerUUID, worker.uuid) for worker in res.workers]
 
     async def increase_worker(self) -> entities.WorkerUUID:
-        rpc = await get_rpc(self.rpc_chooser, bytes_uuid())
-        res = await rpc.increase_worker(task_worker_manager_rpc.IncreaseWorkerRequest())
-        return cast(entities.WorkerUUID, res.worker.uuid)
+        await self.update_selector_nodes()
+        async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
+            res = await rpc.increase_worker(task_worker_manager_rpc.IncreaseWorkerRequest())
+            return cast(entities.WorkerUUID, res.worker.uuid)
 
     async def dispatch_fun_task(self, worker_uuid: entities.WorkerUUID, func_task: bytes, dependencies: List[str],
                                 change_status: bool, timeout: float,
                                 argument: entities.FuncArgument | None) -> entities.TaskUUID:
-        rpc = await get_rpc(self.rpc_chooser, worker_uuid.encode())
-        res = await rpc.dispatch_fun_task(task_worker_manager_rpc.DispatchFunTaskRequest(
-            worker_uuid,
-            func_task,
-            dependencies,
-            change_status,
-            timeout,
-            argument and types.Args(
-                argument.args,
-                [types.KwArgs(k, v) for k, v in argument.kwargs]
-            )
-        ))
-        return cast(entities.TaskUUID, res.task.uuid)
+        await self.update_selector_nodes()
+        async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
+            res = await rpc.dispatch_fun_task(task_worker_manager_rpc.DispatchFunTaskRequest(
+                worker_uuid,
+                func_task,
+                dependencies,
+                change_status,
+                timeout,
+                argument and types.Args(
+                    argument.args,
+                    [types.KwArgs(k, v) for k, v in argument.kwargs]
+                )
+            ))
+            return cast(entities.TaskUUID, res.task.uuid)
 
     async def stop_task(self, worker_uuid: entities.WorkerUUID, task_uuid: entities.TaskUUID):
-        rpc = await get_rpc(self.rpc_chooser, (worker_uuid + task_uuid).encode())
-        await rpc.stop_task(task_worker_manager_rpc.StopTaskRequest(
-            worker_uuid,
-            task_uuid
-        ))
+        await self.update_selector_nodes()
+        async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
+            await rpc.stop_task(task_worker_manager_rpc.StopTaskRequest(
+                worker_uuid,
+                task_uuid
+            ))
 
     async def stop_worker(self, worker_uuid: entities.WorkerUUID):
-        rpc = await get_rpc(self.rpc_chooser, worker_uuid.encode())
-        await rpc.stop_worker(task_worker_manager_rpc.StopWorkerRequest(
-            worker_uuid
-        ))
+        await self.update_selector_nodes()
+        async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
+            await rpc.stop_worker(task_worker_manager_rpc.StopWorkerRequest(
+                worker_uuid
+            ))
 
     async def kill_worker(self, worker_uuid: entities.WorkerUUID):
-        rpc = await get_rpc(self.rpc_chooser, worker_uuid.encode())
-        await rpc.kill_worker(task_worker_manager_rpc.KillWorkerRequest(worker_uuid))
+        await self.update_selector_nodes()
+        async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
+            await rpc.kill_worker(task_worker_manager_rpc.KillWorkerRequest(worker_uuid))
 
     async def get_queued_status(self, timeout: None | float = None) -> AsyncIterator[StatusReport]:
-        rpc = await get_rpc(self.rpc_chooser, bytes_uuid())
-        try:
-            async for res in rpc.get_queued_status(task_worker_manager_rpc.Empty(), timeout=timeout):
-                status_report = res.status_report
-                yield StatusReport(
-                    task_uuid=cast(entities.TaskUUID, status_report.task_uuid),
-                    worker_uuid=cast(entities.WorkerUUID, status_report.worker_uuid),
-                    status=status_report.task_status or status_report.worker_status,  # type: ignore
-                    content=status_report.serialized_content,
-                    create_timestamp=status_report.create_timestamp
-                )
-        except:
-            yield None
+        await self.update_selector_nodes()
+        async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
+            try:
+                async for res in rpc.get_queued_status(Empty(), timeout=timeout):
+                    status_report = res.status_report
+                    yield StatusReport(
+                        task_uuid=cast(entities.TaskUUID, status_report.task_uuid),
+                        worker_uuid=cast(entities.WorkerUUID, status_report.worker_uuid),
+                        status=status_report.task_status or status_report.worker_status,  # type: ignore
+                        content=status_report.serialized_content,
+                        create_timestamp=status_report.create_timestamp
+                    )
+            except AsyncTimeoutError:
+                ...
 
     async def get_task_queue_size(self, worker: entities.WorkerUUID) -> int:
-        rpc = await get_rpc(self.rpc_chooser, worker.encode())
-        raise NotImplementedError('get task queue size not impl')
+        await self.update_selector_nodes()
+        async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
+            raise NotImplementedError('get task queue size not impl')
