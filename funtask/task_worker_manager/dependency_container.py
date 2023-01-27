@@ -23,9 +23,12 @@ class TaskWorkerManagerContainer(containers.DeclarativeContainer):
         providers.Selector(
             config.queue.type,
             multiprocessing=providers.Factory(
-                lambda host, port: MultiprocessingQueueFactory(host, port)("task_queue"),
+                lambda host, port, manager_uuid: MultiprocessingQueueFactory(host, port)(
+                    f"task_status_queue-{manager_uuid}"
+                ),
                 host=config.queue.host,
                 port=config.queue.port,
+                manager_uuid=config.rpc.uuid
             )
         )
     )

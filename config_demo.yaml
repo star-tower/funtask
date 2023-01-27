@@ -20,6 +20,8 @@ config:
       port: 2336
     rpc_selector:
       type: hash
+    repository:
+      uri: mysql+aiomysql://root:zqqqqz2000@127.0.0.1:3306/funtask
     cron_scheduler:
       type: schedule
     argument_queue:
@@ -63,6 +65,8 @@ config:
           uuid: manager
     rpc_selector:
       type: hash
+    repository:
+      uri: mysql+aiomysql://root:zqqqqz2000@127.0.0.1:3306/funtask
     cron_scheduler:
       type: schedule
     argument_queue:

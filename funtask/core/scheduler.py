@@ -37,7 +37,7 @@ class WorkerScheduler(interface.WorkerScheduler):
     def __init__(
             self,
             funtask_manager_rpc: interface.FunTaskManagerRPC = Provide['funtask_manager_rpc'],
-            repository: interface.Repository = Provide['repository'],
+            repository: interface.Repository = Provide['scheduler.repository'],
             cron: interface.Cron = Provide['scheduler.cron'],
             argument_queue_factory: interface.QueueFactory = Provide['scheduler.argument_queue_factory'],
             lock: interface.DistributeLock = Provide['lock']
@@ -68,7 +68,7 @@ class WorkerScheduler(interface.WorkerScheduler):
                         f"can't change status from {task.status} to {task.status}"
                     )
             await self.repository.change_task_status(task_uuid=status_report.task_uuid, status=status_report.status)
-        elif isinstance(status_report.status, entities.WorkerStatus):
+        elif status_report.status is None:
             assert status_report.worker_uuid is not None, ValueError(
                 "worker uuid should not be none, when status type is WorkerStatus, please report this bug"
             )

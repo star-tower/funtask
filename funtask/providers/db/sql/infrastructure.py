@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List, Dict, Any, AsyncIterator, Tuple, Type, TypeVar
 
 from sqlalchemy import insert
+from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncEngine
 from sqlalchemy.orm import sessionmaker, selectinload
 from sqlalchemy.sql import select, update
@@ -50,10 +51,11 @@ class Repository(interface.Repository):
             self,
             t: Type[EntityConvertable[_T]],
             uuid: str,
+            options: List = None,
             session: AsyncSession | None = None
     ) -> _T:
         async with self._ensure_session(session) as session:
-            result = await self._get_model_from_uuid(t, uuid, session)
+            result = await self._get_model_from_uuid(t, uuid, options=options, session=session)
             result: EntityConvertable[_T]
             return result.to_entity()
 
@@ -61,11 +63,13 @@ class Repository(interface.Repository):
             self,
             t: Type[_T],
             uuid: str,
+            options: List = None,
             session: AsyncSession | None = None
     ) -> _T:
+        options = options or []
         async with self._ensure_session(session) as session:
             result = (await session.execute(
-                select(t).where(t.uuid == uuid)  # type: ignore
+                select(t).where(t.uuid == uuid).options(*options)  # type: ignore
             )).first()
             if not result:
                 raise interface.RecordNotFoundException(
@@ -111,14 +115,14 @@ class Repository(interface.Repository):
     ) -> entities.Func:
         return await self._get_entity_from_uuid(
             model.Function,
-            func_uuid, session
+            func_uuid, session=session
         )
 
     async def get_task_from_uuid(self, task_uuid: entities.TaskUUID,
                                  session: AsyncSession | None = None) -> entities.Task:
         return await self._get_entity_from_uuid(
             model.Task,
-            task_uuid, session
+            task_uuid, session=session
         )
 
     async def get_cron_task_from_uuid(
@@ -128,7 +132,7 @@ class Repository(interface.Repository):
     ) -> entities.CronTask:
         return await self._get_entity_from_uuid(
             model.CronTask,
-            task_uuid, session
+            task_uuid, session=session
         )
 
     async def get_all_cron_task(self, session: AsyncSession | None = None) -> List[entities.CronTask]:
@@ -151,7 +155,7 @@ class Repository(interface.Repository):
             self, task_uuid: entities.TaskUUID, status: entities.TaskStatus, session: AsyncSession | None = None):
         async with self._ensure_session(session) as session:
             session: AsyncSession
-            task = await self._get_model_from_uuid(model.Task, task_uuid, session)
+            task = await self._get_model_from_uuid(model.Task, task_uuid, session=session)
             task.status = status.value
 
     async def add_func(self, func: entities.Func, session: AsyncSession | None = None):
@@ -189,6 +193,7 @@ class Repository(interface.Repository):
             return await self._get_entity_from_uuid(
                 model.Worker,
                 task_uuid,
+                [selectinload(model.Worker.tags)],
                 session
             )
 
@@ -196,7 +201,7 @@ class Repository(interface.Repository):
             self, worker_uuid: entities.WorkerUUID, status: entities.WorkerStatus, session: AsyncSession | None = None):
         async with self._ensure_session(session) as session:
             session: AsyncSession
-            worker = await self._get_model_from_uuid(model.Worker, worker_uuid, session)
+            worker = await self._get_model_from_uuid(model.Worker, worker_uuid, session=session)
             worker.status = status.value
 
     async def add_cron_task(self, task: entities.CronTask, session: AsyncSession | None = None):
@@ -295,12 +300,12 @@ class Repository(interface.Repository):
             self, worker_uuid: entities.WorkerUUID, t: datetime, session: AsyncSession | None = None):
         async with self._ensure_session(session) as session:
             session: AsyncSession
-            res: Tuple[model.Worker] = await session.execute(
+            res: Row[model.Worker] = (await session.execute(
                 select(model.Worker).where(model.Worker.uuid == worker_uuid)
-            )
+            )).first()
             if not res:
                 raise interface.RecordNotFoundException(f'worker {worker_uuid} not found')
-            worker = res[0]
+            worker: model.Worker = res[0]
             worker.last_heart_beat = t
 
     async def get_workers_from_tags(

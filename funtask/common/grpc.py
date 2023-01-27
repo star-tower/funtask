@@ -30,13 +30,13 @@ def core_status2rpc_status(core_status: WorkerStatus | TaskStatus | None)\
         -> Dict[str, StatusReportTaskStatus | StatusReportWorkerStatus | None]:
     if core_status is None:
         return {
-            'worker_status': None
+            'worker_status': StatusReportWorkerStatus.HEARTBEAT
         }
-    if isinstance(core_status, WorkerStatus):
+    if isinstance(core_status, TaskStatus):
         return {
-            'task_status': StatusReportTaskStatus.from_string(core_status.value)
+            'task_status': StatusReportTaskStatus.from_string(core_status.name)
         }  # type: ignore
     else:
         return {
-            'worker_status': StatusReportWorkerStatus.from_string(core_status.value)
+            'worker_status': StatusReportWorkerStatus.from_string(core_status.name)
         }  # type: ignore

@@ -63,6 +63,7 @@ class Worker:
                     ))
                     last_heart_beat = time.time()
                 if control is None:
+                    await asyncio.sleep(.01)
                     continue
                 match control.control_sig:
                     case interface.TaskControl.KILL:

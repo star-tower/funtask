@@ -2,6 +2,8 @@ import asyncio
 import base64
 import contextlib
 import time
+from dataclasses import asdict
+
 import aiohttp
 from collections import defaultdict
 from queue import Queue as Q
@@ -12,6 +14,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fire import Fire
 from loguru import logger
+from pydantic.dataclasses import dataclass
 
 from funtask.core.interface_and_types import Queue, _T, BreakRef
 from funtask.providers.queue.common import NeverBreak
@@ -24,7 +27,7 @@ queue_service_pointer = SelfPointer()
 class _QueueContentEnDe:
     @staticmethod
     def encode(obj: Any):
-        return base64.b64encode(dill.dumps(obj))
+        return base64.b64encode(dill.dumps(obj)).decode('utf8')
 
     @staticmethod
     def decode(content: str):
@@ -32,13 +35,18 @@ class _QueueContentEnDe:
 
 
 @contextlib.asynccontextmanager
-async def async_http(url: str, method: str = 'get') -> AsyncIterator[aiohttp.ClientResponse]:
+async def async_http(url: str, method: str = 'get', *args, **kwargs) -> AsyncIterator[aiohttp.ClientResponse]:
     assert method.lower() in {'get', 'post'}
     async with aiohttp.ClientSession() as session:
         func = session.get if method.lower() == 'get' else session.post
-        async with func(url) as resp:
+        async with func(url, *args, **kwargs) as resp:
             resp: aiohttp.ClientResponse
             yield resp
+
+
+@dataclass
+class PutItem:
+    content_b64: str
 
 
 class QueueControl:
@@ -53,9 +61,9 @@ class QueueControl:
 
     @app.post('/item/{name}')
     @self_wrapper(queue_service_pointer)
-    async def put(self, content_b64: str, name: str):
+    async def put(self, name: str, item: PutItem):
         _, q = self.q_pool[name]
-        front = _QueueContentEnDe.decode(content_b64)
+        front = _QueueContentEnDe.decode(item.content_b64)
         q.put_nowait(front)
         self.q_pool[name] = (front, q)
 
@@ -115,10 +123,17 @@ class MultiprocessingQueue(Queue, Generic[_T]):
                     if break_ref.if_break_now():
                         break
                     await asyncio.sleep(0.01)
+                    continue
                 return _QueueContentEnDe.decode(await resp.text('utf8'))
 
     async def put(self, obj: _T):
-        async with async_http(f'{self.uri}/item/{self.name}', 'post'):
+        async with async_http(
+                f'{self.uri}/item/{self.name}',
+                'post',
+                json=asdict(PutItem(
+                    content_b64=_QueueContentEnDe.encode(obj)
+                ))
+        ):
             return
 
     async def get(self, timeout: None | float = None) -> _T | None:

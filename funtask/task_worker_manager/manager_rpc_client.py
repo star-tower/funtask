@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import List, cast, AsyncIterator
+from typing import List, cast, AsyncIterator, Dict
 from uuid import uuid4
 from grpclib.client import Channel
 from asyncio.exceptions import TimeoutError as AsyncTimeoutError
@@ -106,10 +106,12 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
             try:
                 async for res in rpc.get_queued_status(Empty(), timeout=timeout):
                     status_report = res.status_report
+                    status_report_dict = res.status_report.to_dict()
+
                     yield StatusReport(
                         task_uuid=cast(entities.TaskUUID, status_report.task_uuid),
                         worker_uuid=cast(entities.WorkerUUID, status_report.worker_uuid),
-                        status=status_report.task_status or status_report.worker_status,  # type: ignore
+                        status=get_report_entity_status(status_report_dict),
                         content=status_report.serialized_content,
                         create_timestamp=status_report.create_timestamp
                     )
@@ -120,3 +122,14 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
         await self.update_selector_nodes()
         async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
             raise NotImplementedError('get task queue size not impl')
+
+
+def get_report_entity_status(report_dict: Dict) -> entities.TaskStatus | entities.WorkerStatus | None:
+    if 'workerStatus' in report_dict:
+        status = report_dict['workerStatus']
+        if status == 'HEARTBEAT':
+            return None
+        return entities.WorkerStatus(status)
+    if 'taskStatus' in report_dict:
+        return entities.TaskStatus(report_dict['taskStatus'])
+    raise ValueError(f'either `workerStatus` nor `taskStatus` in {report_dict}')
