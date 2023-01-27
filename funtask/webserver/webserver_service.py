@@ -69,7 +69,10 @@ class Webserver:
     @self_wrapper(webserver_pointer)
     async def get_workers(self, req: BatchQueryReq):
         await self.update_selector_nodes()
-        workers, cursor = await self.repository.get_workers_from_cursor(req.limit, req.cursor)
+        res = await self.repository.get_workers_from_cursor(req.limit, req.cursor)
+        if res is None:
+            return WorkersWithCursor([], 0)
+        workers, cursor = res
         return WorkersWithCursor(workers, cursor)
 
     async def trigger_func(self, func: entities.Func, argument: entities.FuncArgument) -> entities.Task:

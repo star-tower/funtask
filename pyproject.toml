@@ -34,7 +34,8 @@ dependencies = [
     "fire~=0.4.0",
     "loguru~=0.6.0",
     "sqlalchemy[asyncio]~=1.4.41",
-    "aiomysql~=0.1.1"
+    "aiomysql~=0.1.1",
+    "aiohttp~=3.8.3"
 ]
 dynamic = ["version"]
 

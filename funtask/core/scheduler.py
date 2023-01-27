@@ -305,7 +305,7 @@ class WorkerScheduler(interface.WorkerScheduler):
                             ))
                         case entities.ArgumentGenerateStrategy.FROM_QUEUE_END_REPEAT_LATEST:
                             try:
-                                argument = await argument_queue.get_front()
+                                argument = await argument_queue.peek_front_cache()
                             except interface.EmptyQueueException:
                                 await self.repository.add_task(entities.Task(
                                     uuid=new_task_uuid,

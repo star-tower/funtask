@@ -5,20 +5,27 @@ from funtask.providers.loggers.std import StdLogger
 from funtask.providers.queue.multiprocessing_queue import MultiprocessingQueueFactory
 from funtask.providers.worker_manager.multiprocessing_manager import MultiprocessingManager
 
+config = providers.Configuration()
+
 _queue_factories = {
-    'multiprocessing': providers.Object(MultiprocessingQueueFactory().factory)
+    'multiprocessing': providers.Singleton(
+        MultiprocessingQueueFactory,
+        host=config.queue.host,
+        port=config.queue.port
+    )
 }
 
 
 class TaskWorkerManagerContainer(containers.DeclarativeContainer):
-    config = providers.Configuration()
+    config = config
     rpc = config.rpc
     task_status_queue = providers.Singleton(
         providers.Selector(
-            config.queue.task_status.type,
+            config.queue.type,
             multiprocessing=providers.Factory(
-                MultiprocessingQueueFactory().factory,
-                name="task_queue"
+                lambda host, port: MultiprocessingQueueFactory(host, port)("task_queue"),
+                host=config.queue.host,
+                port=config.queue.port,
             )
         )
     )
@@ -34,11 +41,11 @@ class TaskWorkerManagerContainer(containers.DeclarativeContainer):
                 MultiprocessingManager,
                 logger=logger,
                 task_queue_factory=providers.Selector(
-                    config.queue.task.type,
+                    config.queue.type,
                     **_queue_factories
                 ),
                 control_queue_factory=providers.Selector(
-                    config.queue.control.type,
+                    config.queue.type,
                     **_queue_factories
                 ),
                 task_status_queue=task_status_queue

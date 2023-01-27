@@ -3,12 +3,9 @@ config:
     logger:
       type: std
     queue:
-      task:
-        type: multiprocessing
-      task_status:
-        type: multiprocessing
-      control:
-        type: multiprocessing
+      type: multiprocessing
+      host: localhost
+      port: 3333
     manager:
       type: multiprocessing
     rpc:
@@ -27,6 +24,8 @@ config:
       type: schedule
     argument_queue:
       type: multiprocessing
+      host: localhost
+      port: 3333
     lock:
       type: multiprocessing
     manager_control:
@@ -68,6 +67,8 @@ config:
       type: schedule
     argument_queue:
       type: multiprocessing
+      host: localhost
+      port: 3333
     lock:
       type: multiprocessing
     scheduler_control:

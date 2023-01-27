@@ -63,7 +63,11 @@ class SchedulerContainer(containers.DeclarativeContainer):
     )
     argument_queue_factory = providers.Selector(
         config.argument_queue.type,
-        multiprocessing=providers.Factory(MultiprocessingQueueFactory)
+        multiprocessing=providers.Factory(
+            MultiprocessingQueueFactory,
+            host=config.argument_queue.host,
+            port=config.argument_queue.port
+        )
     )
     lock = providers.Selector(
         config.lock.type,

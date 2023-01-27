@@ -79,7 +79,7 @@ class Queue(Generic[_T]):
         ...
 
     @abstractmethod
-    async def get_front(self) -> _T | None:
+    async def peek_front_cache(self) -> _T | None:
         """
         get first element of queue, if queue is empty, raise an EmptyQueueException
         :return:

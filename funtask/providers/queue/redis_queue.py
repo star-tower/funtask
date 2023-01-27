@@ -23,7 +23,7 @@ class RedisQueue(Queue, Generic[_T]):
         self.r = redis.Redis(*args, **kwargs)
         self.qid = queue_id
 
-    async def get_front(self) -> _T | None:
+    async def peek_front_cache(self) -> _T | None:
         raise NotImplemented()
 
     @staticmethod
