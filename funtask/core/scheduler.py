@@ -80,7 +80,10 @@ class WorkerScheduler(interface.WorkerScheduler):
                 raise interface.StatusChangeException(
                     f"worker {worker.uuid} status is {worker.status}, but still heart beat"
                 )
-            await self.repository.update_worker_last_heart_beat_time(status_report.worker_uuid, datetime.now())
+            await self.repository.update_worker_last_heart_beat_time(
+                status_report.worker_uuid,
+                datetime.fromtimestamp(status_report.create_timestamp)
+            )
 
     async def assign_task(self, task_uuid: entities.TaskUUID):
         task = await self.repository.get_task_from_uuid(task_uuid)

@@ -76,7 +76,10 @@ class Worker(Base):
             uuid=cast(entities.WorkerUUID, self.uuid),
             status=entities.WorkerStatus(self.status.value),
             name=self.name,
-            tags=TagRelation.tag_relations2entities(self.tags)
+            tags=TagRelation.tag_relations2entities(self.tags),
+            last_heart_beat=self.last_heart_beat,
+            start_time=self.start_time,
+            stop_time=self.stop_time
         )
 
 

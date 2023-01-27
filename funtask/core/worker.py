@@ -55,12 +55,13 @@ class Worker:
                 control = await self.queue.control_queue.get(timeout=1)
                 if time.time() - last_heart_beat > 5:
                     # heart beat status is None
-                    await self.queue.status_queue.put(interface.StatusQueueMessage(
+                    status_message = interface.StatusQueueMessage(
                         cast(entities.WorkerUUID, self.worker_uuid),
                         None,
                         None,
                         None
-                    ))
+                    )
+                    await self.queue.status_queue.put(status_message)
                     last_heart_beat = time.time()
                 if control is None:
                     await asyncio.sleep(.01)

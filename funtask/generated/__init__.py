@@ -59,4 +59,4 @@ class StatusReport(betterproto.Message):
         5, group="status"
     )
     serialized_content: bytes = betterproto.bytes_field(6)
-    create_timestamp: float = betterproto.float_field(7)
+    create_timestamp: float = betterproto.double_field(7)

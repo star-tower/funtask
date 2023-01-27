@@ -37,5 +37,5 @@ message StatusReport {
     WorkerStatus worker_status = 5;
   }
   bytes serialized_content = 6;
-  float create_timestamp = 7;
+  double create_timestamp = 7;
 }

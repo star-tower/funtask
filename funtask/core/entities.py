@@ -1,5 +1,6 @@
 import math
 from dataclasses import field
+from datetime import datetime
 from enum import unique, auto
 from typing import NewType, TypeVar, List, Any, Dict, Optional, Union
 
@@ -221,5 +222,8 @@ class Tag:
 class Worker:
     uuid: WorkerUUID
     status: WorkerStatus
+    last_heart_beat: datetime | None = None
+    start_time: datetime | None = None
+    stop_time: datetime | None = None
     name: str | None = None
     tags: List[Tag] = field(default_factory=list)
