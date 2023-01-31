@@ -7,7 +7,7 @@ from pydantic.dataclasses import dataclass
 
 
 @dataclass
-class IncreaseWorkerReq:
+class IncreaseWorkersReq:
     number: int
     tags: List[entities.Tag]
     name: str | None = Field(nullable=True)
@@ -22,4 +22,11 @@ class BatchQueryReq:
 @dataclass
 class WorkersWithCursor:
     workers: List[entities.Worker]
-    cursor: int
+    cursor: int | None = Field(nullable=True)
+
+
+@dataclass
+class NewFuncInstanceReq:
+    func_base64: str
+    worker_name: str | None = Field(nullable=True)
+    worker_tags: List[entities.Tag] | None = Field(nullable=True)

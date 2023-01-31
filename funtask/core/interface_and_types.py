@@ -517,6 +517,10 @@ class Repository:
         ...
 
     @abstractmethod
+    async def get_worker_from_name(self, name: str, session=None) -> entities.Worker:
+        ...
+
+    @abstractmethod
     async def change_worker_status(self, worker_uuid: entities.WorkerUUID, status: entities.WorkerStatus, session=None):
         ...
 

@@ -118,6 +118,19 @@ class Repository(interface.Repository):
             func_uuid, session=session
         )
 
+    async def get_worker_from_name(self, name: str, session: AsyncSession | None = None) -> entities.Task:
+        async with self._ensure_session(session) as session:
+            session: AsyncSession
+            query = select(model.Worker).where(model.Worker.name == name).options(selectinload(model.Worker.tags))
+            result = (await session.execute(query)).first()
+
+            if not result:
+                raise interface.RecordNotFoundException(
+                    f'worker name `{name}` not found'
+                )
+            worker: model.Worker = result[0]
+            return worker.to_entity()
+
     async def get_task_from_uuid(self, task_uuid: entities.TaskUUID,
                                  session: AsyncSession | None = None) -> entities.Task:
         return await self._get_entity_from_uuid(

@@ -1,17 +1,34 @@
 import asyncio
+import base64
+import re
 import time
 from typing import List, Tuple
+
+import dill
 from grpclib.client import Channel
 from funtask.core import interface_and_types as interface, entities
 from dependency_injector.wiring import inject, Provide
 from fastapi import FastAPI, APIRouter
 import uvicorn
 
-from funtask.webserver.model import IncreaseWorkerReq, BatchQueryReq, WorkersWithCursor
+from funtask.webserver.model import IncreaseWorkersReq, BatchQueryReq, WorkersWithCursor, NewFuncInstanceReq
 from funtask.webserver.utils import self_wrapper, SelfPointer
 
 api = APIRouter(prefix='/api', tags=['api'])
 webserver_pointer = SelfPointer()
+
+func_name_re = re.compile(r'def *(\w+) *\(')
+
+
+def _extract_func_bytes(func_base64: str) -> bytes:
+    func_str = base64.b64decode(func_base64.encode('utf8')).decode('utf8')
+    name_match_res = func_name_re.findall(func_str.strip())
+    if not name_match_res:
+        raise ValueError('function syntax err, must start with `def ...([*args], [**kwargs]):`')
+    local = {}
+    exec(func_str, {}, local)
+    func_bytes = dill.dumps(local[name_match_res[0]])
+    return func_bytes
 
 
 class Webserver:
@@ -42,9 +59,9 @@ class Webserver:
                 self.channel_selector.channel_node_changes(nodes)
                 self.latest_selector_node_update = curr_time
 
-    @api.post('/increase_worker', response_model=List[entities.Worker])
+    @api.post('/workers', response_model=List[entities.Worker])
     @self_wrapper(webserver_pointer)
-    async def increase_worker(self, req: IncreaseWorkerReq) -> List[entities.Worker]:
+    async def increase_worker(self, req: IncreaseWorkersReq) -> List[entities.Worker]:
         await self.update_selector_nodes()
         try:
             worker_uuids = await self.task_worker_manager_rpc.increase_workers(req.number)
@@ -65,7 +82,7 @@ class Webserver:
             worker_entities.append(worker)
         return worker_entities
 
-    @api.post('/get_workers', response_model=WorkersWithCursor)
+    @api.get('/workers', response_model=WorkersWithCursor)
     @self_wrapper(webserver_pointer)
     async def get_workers(self, req: BatchQueryReq):
         await self.update_selector_nodes()
@@ -75,8 +92,26 @@ class Webserver:
         workers, cursor = res
         return WorkersWithCursor(workers, cursor)
 
-    async def trigger_func(self, func: entities.Func, argument: entities.FuncArgument) -> entities.Task:
-        pass
+    @api.post('/func_instance')
+    @self_wrapper(webserver_pointer)
+    async def trigger_func(self, req: NewFuncInstanceReq) -> entities.Task:
+        assert req.worker_name is None or req.worker_tags is None, ValueError('name or tags can\'t both exist')
+        assert (req.worker_name or req.worker_tags) is not None, ValueError('name or tags must exist one')
+        await self.update_selector_nodes()
+        func_bytes = _extract_func_bytes(req.func_base64)
+        if req.worker_name is not None:
+            worker = await self.repository.get_worker_from_name(req.worker_name)
+            task_uuid = await self.task_worker_manager_rpc.dispatch_fun_task(
+                worker.uuid,
+                func_bytes,
+                dependencies=[],
+                change_status=False,
+                timeout=10000,
+                argument=None
+            )
+            return await self.repository.get_task_from_uuid(task_uuid)
+        else:
+            raise NotImplementedError('not impl trigger by tag yet')
 
     async def get_task_by_uuid(self, task_uuid: entities.TaskUUID) -> entities.Task | None:
         pass
