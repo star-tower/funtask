@@ -22,11 +22,16 @@ class BatchQueryReq:
 @dataclass
 class WorkersWithCursor:
     workers: List[entities.Worker]
-    cursor: int | None = Field(nullable=True)
+    cursor: int
 
 
 @dataclass
 class NewFuncInstanceReq:
-    func_base64: str
-    worker_name: str | None = Field(nullable=True)
+    timeout: int
+    dependencies: List[str]
+    change_state: bool
+    func_base64: str | None = Field(nullable=True)
+    func_uuid: entities.FuncUUID | None = Field(nullable=True)
+    name: str | None = Field(nullable=True)
+    worker_uuids: List[entities.WorkerUUID] | None = Field(nullable=True)
     worker_tags: List[entities.Tag] | None = Field(nullable=True)

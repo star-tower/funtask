@@ -561,7 +561,7 @@ class Repository:
     @abstractmethod
     async def get_workers_from_tags(
             self,
-            tags: List[str],
+            tags: List[entities.Tag],
             session=None
     ) -> List[entities.Worker]:
         ...

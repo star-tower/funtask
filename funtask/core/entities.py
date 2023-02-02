@@ -133,6 +133,7 @@ class Func:
 @dataclass
 class FuncArgument:
     uuid: FuncArgumentUUID
+    name: str | None
     args: List[bytes]
     kwargs: Dict[str, bytes]
 

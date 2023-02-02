@@ -84,9 +84,9 @@ class Webserver:
 
     @api.get('/workers', response_model=WorkersWithCursor)
     @self_wrapper(webserver_pointer)
-    async def get_workers(self, req: BatchQueryReq):
+    async def get_workers(self, limit: int, cursor: int | None = None):
         await self.update_selector_nodes()
-        res = await self.repository.get_workers_from_cursor(req.limit, req.cursor)
+        res = await self.repository.get_workers_from_cursor(limit, cursor)
         if res is None:
             return WorkersWithCursor([], 0)
         workers, cursor = res
@@ -94,24 +94,41 @@ class Webserver:
 
     @api.post('/func_instance')
     @self_wrapper(webserver_pointer)
-    async def trigger_func(self, req: NewFuncInstanceReq) -> entities.Task:
-        assert req.worker_name is None or req.worker_tags is None, ValueError('name or tags can\'t both exist')
-        assert (req.worker_name or req.worker_tags) is not None, ValueError('name or tags must exist one')
+    async def trigger_func(self, req: NewFuncInstanceReq) -> List[str]:
+        assert (req.worker_uuids is not None) and (req.worker_tags is not None), ValueError(
+            'worker uuid or tags can\'t both exist'
+        )
+        assert (req.worker_uuids or req.worker_tags) is not None, ValueError('name or tags must exist one')
+        assert (req.func_base64 is None) and (req.func_uuid is None), ValueError('func and func_uuid must exist one')
         await self.update_selector_nodes()
-        func_bytes = _extract_func_bytes(req.func_base64)
-        if req.worker_name is not None:
-            worker = await self.repository.get_worker_from_name(req.worker_name)
+        if req.func_base64:
+            func_bytes = _extract_func_bytes(req.func_base64)
+        elif req.func_uuid:
+            func = await self.repository.get_function_from_uuid(req.func_uuid)
+            func_bytes = func.func
+        else:
+            raise ValueError('func uuid and name both None')
+
+        if req.worker_uuids is not None:
+            worker_uuids = req.worker_uuids
+        elif req.worker_tags:
+            workers = await self.repository.get_workers_from_tags(req.worker_tags)
+            worker_uuids = [worker.uuid for worker in workers]
+        else:
+            raise ValueError('worker uuid and tags both None')
+
+        res_tasks = []
+        for worker_uuid in worker_uuids:
             task_uuid = await self.task_worker_manager_rpc.dispatch_fun_task(
-                worker.uuid,
+                worker_uuid,
                 func_bytes,
-                dependencies=[],
-                change_status=False,
-                timeout=10000,
+                dependencies=req.dependencies,
+                change_status=req.change_state,
+                timeout=req.timeout,
                 argument=None
             )
-            return await self.repository.get_task_from_uuid(task_uuid)
-        else:
-            raise NotImplementedError('not impl trigger by tag yet')
+            res_tasks.append(task_uuid)
+        return res_tasks
 
     async def get_task_by_uuid(self, task_uuid: entities.TaskUUID) -> entities.Task | None:
         pass

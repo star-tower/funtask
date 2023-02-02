@@ -1,6 +1,8 @@
 from abc import abstractmethod
 from enum import auto, unique
 from typing import List, cast, Generic, TypeVar, Protocol, Any, Optional
+
+import dill
 from sqlalchemy import Column, Integer, String, ForeignKey, Enum, VARBINARY, Boolean, Float, BigInteger, JSON, \
     TIMESTAMP, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship, Mapped
@@ -71,7 +73,7 @@ class Worker(Base):
         backref='Workers'
     )
 
-    def to_entity(self) -> _T:
+    def to_entity(self) -> entities.Worker:
         return entities.Worker(
             uuid=cast(entities.WorkerUUID, self.uuid),
             status=entities.WorkerStatus(self.status.value),
@@ -90,7 +92,7 @@ class ParameterSchema(Base):
     uuid = Column(String(36), nullable=False, unique=True)
     functions: List['Function']
 
-    def to_entity(self) -> _T:
+    def to_entity(self) -> entities.ParameterSchema:
         return entities.ParameterSchema(
             uuid=cast(entities.ParameterSchemaUUID, self.uuid)
         )
@@ -120,7 +122,7 @@ class Function(Base):
     ref_tasks: List['Task']
     ref_cron_tasks: List['CronTask']
 
-    def to_entity(self) -> _T:
+    def to_entity(self) -> entities.Func:
         parameter_schema = self.parameter_schema
         if parameter_schema is not None:
             parameter_schema = parameter_schema.to_entity()
@@ -143,8 +145,14 @@ class Argument(Base):
     name = Column(String(32), nullable=True)
     argument = Column(VARBINARY(1024), nullable=False)
 
-    def to_entity(self) -> _T:
-        pass
+    def to_entity(self) -> entities.FuncArgument:
+        args, kwargs = dill.loads(self.argument)
+        return entities.FuncArgument(
+            cast(entities.FuncArgumentUUID, self.uuid),
+            self.name,
+            args,
+            kwargs
+        )
 
 
 class Task(Base):
@@ -161,7 +169,8 @@ class Task(Base):
     status = Column(Enum(TaskStatus), nullable=False)
     func_id = Column(BigInteger(), ForeignKey('function.id'), nullable=False)
     func: Function = relationship('Function', backref="ref_tasks")
-    argument = Column(VARBINARY(1024), nullable=False)
+    argument_id = Column(ForeignKey(Argument.id))
+    argument: Argument = relationship('Argument')
     result_as_state = Column(Boolean(), nullable=False)
     timeout = Column(Float(), nullable=True)
     description = Column(String(256), nullable=True)
@@ -169,10 +178,27 @@ class Task(Base):
     start_time = Column(TIMESTAMP(), nullable=False, index=True)
     stop_time = Column(TIMESTAMP(), nullable=False, index=True)
     namespace_id = Column(Integer, ForeignKey(Namespace.id), nullable=False)
+    name = Column(String(24), nullable=True)
     namespace: Namespace = relationship('Namespace')
 
-    def to_entity(self) -> _T:
-        pass
+    def to_entity(self) -> entities.Task:
+        return entities.Task(
+            cast(entities.TaskUUID, self.uuid),
+            cast(
+                entities.TaskUUID,
+                self.parent_task_uuid
+            ) if self.parent_task_type == ParentTaskType.TASK else cast(entities.CronTaskUUID, self.parent_task_uuid),
+            cast(entities.TaskUUID, self.uuid_in_manager),
+            entities.TaskStatus(self.status),
+            cast(entities.WorkerUUID, self.worker.uuid),
+            cast(entities.FuncUUID, self.func.uuid),
+            self.argument,
+            self.result_as_state,
+            self.timeout,
+            self.description,
+            self.result,
+            self.name
+        )
 
 
 @unique
@@ -320,5 +346,5 @@ class CronTask(Base):
         backref="ref_corn_tasks"
     )
 
-    def to_entity(self) -> _T:
+    def to_entity(self) -> entities.CronTask:
         pass

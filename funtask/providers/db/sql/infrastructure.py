@@ -1,11 +1,11 @@
 from datetime import datetime
 from typing import List, Dict, Any, AsyncIterator, Tuple, Type, TypeVar
 
-from sqlalchemy import insert
+from sqlalchemy import insert, and_
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncEngine
-from sqlalchemy.orm import sessionmaker, selectinload
-from sqlalchemy.sql import select, update
+from sqlalchemy.orm import sessionmaker, selectinload, aliased
+from sqlalchemy.sql import select, update, or_, functions as fn
 from contextlib import asynccontextmanager
 from funtask.providers.db.sql import model
 
@@ -323,16 +323,36 @@ class Repository(interface.Repository):
 
     async def get_workers_from_tags(
             self,
-            tags: List[str],
+            tags: List[entities.Tag],
             session: AsyncSession | None = None
     ) -> List[entities.Worker]:
         async with self._ensure_session(session) as session:
             session: AsyncSession
+
+            value_tag: Type[model.Tag] = aliased(model.Tag)
+            sub_query = select(model.Worker.id.label('worker_id'), fn.count(model.Worker.id).label('match_cnt')).join(
+                model.TagRelation,
+                model.Worker.uuid == model.TagRelation.related_uuid
+            ).join(model.Tag, model.TagRelation.tag_id == model.Tag.id).join(
+                value_tag,
+                value_tag.parent_tag_id == model.Tag.id,
+                isouter=True
+            ).group_by(model.Worker.uuid).where(
+                model.TagRelation.tag_type == 'worker',
+                or_(
+                    *[
+                        and_(
+                            model.Tag.tag_name == tag.key,
+                            model.Tag.parent_tag_id == tag.value
+                        )
+                        for tag in tags
+                    ]
+                ),
+            ).subquery()
             workers = await session.execute(select(model.Worker).join(
-                model.TagRelation, model.Worker.uuid == model.TagRelation.related_uuid
-            ).where(
-                model.TagRelation.tag_type == 'worker'
-            ))
+                sub_query,
+                sub_query.worker_id == model.Worker.id
+            ).where(sub_query.match_cnt == len(tags)))
             workers: List[Tuple[model.Worker]]
             return [worker[0].to_entity() for worker in workers]
 
