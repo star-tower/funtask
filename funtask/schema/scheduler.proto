@@ -4,8 +4,9 @@ package scheduler;
 import "types.proto";
 
 message AssignTaskRequest {
-  string cron_task_uuid = 2;
-  uint64 start_ms_timestamp = 3;
+  optional string cron_task_uuid = 2;
+  optional string task_uuid = 3;
+  optional uint64 start_ms_timestamp = 4;
 }
 
 message GetTaskListResponse {

@@ -54,7 +54,7 @@ class WorkerScheduler(interface.WorkerScheduler):
             assert status_report.task_uuid is not None, ValueError(
                 'task uuid is None in status report'
             )
-            task = await self.repository.get_task_from_uuid(
+            task = await self.repository.get_task_from_uuid_in_manager(
                 status_report.task_uuid
             )
             # validate status change
@@ -67,14 +67,22 @@ class WorkerScheduler(interface.WorkerScheduler):
                     raise interface.StatusChangeException(
                         f"can't change status from {task.status} to {task.status}"
                     )
-            await self.repository.change_task_status(task_uuid=status_report.task_uuid, status=status_report.status)
+            await self.repository.change_task_status_from_uuid_in_manager(
+                task_uuid_in_manager=status_report.task_uuid,
+                status=status_report.status
+            )
         elif status_report.status is None:
             assert status_report.worker_uuid is not None, ValueError(
                 "worker uuid should not be none, when status type is WorkerStatus, please report this bug"
             )
-            worker = await self.repository.get_worker_from_uuid(
-                status_report.worker_uuid
-            )
+            try:
+                worker = await self.repository.get_worker_from_uuid(
+                    status_report.worker_uuid
+                )
+            except interface.RecordNotFoundException as e:
+                logger.error(e)
+                return
+
             # validate status change
             if worker.status is not entities.WorkerStatus.RUNNING:
                 raise interface.StatusChangeException(
@@ -90,10 +98,10 @@ class WorkerScheduler(interface.WorkerScheduler):
         assert task.worker_uuid is not None, ValueError(
             'worker uuid cannot be None'
         )
-        if isinstance(task.func, entities.FuncUUID):
-            func = await self.repository.get_function_from_uuid(func_uuid=task.func)
-        else:
+        if isinstance(task.func, entities.Func):
             func = task.func
+        else:
+            func = await self.repository.get_function_from_uuid(func_uuid=task.func)
         task_uuid_in_manager = await self.funtask_manager_rpc.dispatch_fun_task(
             worker_uuid=task.worker_uuid,
             func_task=func.func,
@@ -103,7 +111,7 @@ class WorkerScheduler(interface.WorkerScheduler):
             argument=task.argument
         )
         await self.repository.update_task(task_uuid, {
-            'status': entities.TaskStatus.QUEUED,
+            'status': entities.TaskStatus.QUEUED.value,
             'uuid_in_manager': task_uuid_in_manager
         })
 
@@ -454,11 +462,11 @@ class LeaderScheduler(interface.LeaderScheduler):
     def __init__(
             self,
             leader_control: interface.LeaderSchedulerControl,
-            worker_scheduler_rpc: interface.LeaderSchedulerRPC = Provide['scheduler.worker_scheduler_rpc'],
+            leader_scheduler_rpc: interface.LeaderSchedulerRPC = Provide['scheduler.leader_scheduler_rpc'],
             repository: interface.Repository = Provide['repository']
     ):
         self.leader_control = leader_control
-        self.worker_scheduler_rpc: interface.LeaderSchedulerRPC = worker_scheduler_rpc
+        self.leader_scheduler_rpc: interface.LeaderSchedulerRPC = leader_scheduler_rpc
         self.nodes: List[entities.SchedulerNode] | None = None
         self.node_responsible_tasks_dict = None
         self.repository = repository
@@ -474,7 +482,7 @@ class LeaderScheduler(interface.LeaderScheduler):
             nodes: List[entities.SchedulerNode]
     ) -> Dict[entities.SchedulerNode, List[entities.CronTaskUUID]]:
         return {
-            node: await self.worker_scheduler_rpc.get_node_task_list(node) for node in nodes
+            node: await self.leader_scheduler_rpc.get_node_task_list(node) for node in nodes
         }
 
     async def scheduler_node_change(self, scheduler_nodes: List[entities.SchedulerNode]):
@@ -485,7 +493,7 @@ class LeaderScheduler(interface.LeaderScheduler):
         not_assigned_task_uuids = all_tasks - covered_task
         # give down node's task to other
         for task_uuid in not_assigned_task_uuids:
-            await self.worker_scheduler_rpc.assign_task_to_node(
+            await self.leader_scheduler_rpc.assign_task_to_node(
                 random.choice(scheduler_nodes),
                 task_uuid
             )
@@ -501,10 +509,11 @@ class LeaderScheduler(interface.LeaderScheduler):
             return
         for node, tasks in self.node_responsible_tasks_dict.items():
             for task_uuid in tasks:
-                await self.worker_scheduler_rpc.remove_task_from_node(node, task_uuid, rebalanced_date)
-                await self.worker_scheduler_rpc.assign_task_to_node(
+                await self.leader_scheduler_rpc.remove_task_from_node(node, task_uuid, rebalanced_date)
+                await self.leader_scheduler_rpc.assign_task_to_node(
                     random.choice(self.nodes),
                     task_uuid,
+                    None,
                     rebalanced_date
                 )
 
@@ -558,7 +567,7 @@ class Scheduler:
         self.leader_control = leader_control
         self.leader_scheduler = LeaderScheduler(
             leader_control=leader_control,
-            worker_scheduler_rpc=leader_scheduler_rpc,
+            leader_scheduler_rpc=leader_scheduler_rpc,
             repository=repository
         )
         self.task_manager_rpc = manager_rpc

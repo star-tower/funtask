@@ -47,6 +47,19 @@ class Repository(interface.Repository):
             async with self.session_ctx() as session:
                 yield session
 
+    async def _get_entity_from_column(
+            self,
+            t: Type[EntityConvertable[_T]],
+            value: Any,
+            column: str,
+            options: List = None,
+            session: AsyncSession | None = None
+    ) -> _T:
+        async with self._ensure_session(session) as session:
+            result = await self._get_model_from_uuid(t, value, options=options, session=session)
+            result: EntityConvertable[_T]
+            return result.to_entity()
+
     async def _get_entity_from_uuid(
             self,
             t: Type[EntityConvertable[_T]],
@@ -59,6 +72,25 @@ class Repository(interface.Repository):
             result: EntityConvertable[_T]
             return result.to_entity()
 
+    async def _get_model_from_column(
+            self,
+            t: Type[_T],
+            value: str,
+            column: str,
+            options: List = None,
+            session: AsyncSession | None = None
+    ) -> _T:
+        options = options or []
+        async with self._ensure_session(session) as session:
+            result = (await session.execute(
+                select(t).where(getattr(t, column) == value).options(*options)  # type: ignore
+            )).first()
+            if not result:
+                raise interface.RecordNotFoundException(
+                    f'{t.__name__}: column {column} of value: `{value}` not found'
+                )
+            return result[0]
+
     async def _get_model_from_uuid(
             self,
             t: Type[_T],
@@ -66,16 +98,13 @@ class Repository(interface.Repository):
             options: List = None,
             session: AsyncSession | None = None
     ) -> _T:
-        options = options or []
-        async with self._ensure_session(session) as session:
-            result = (await session.execute(
-                select(t).where(t.uuid == uuid).options(*options)  # type: ignore
-            )).first()
-            if not result:
-                raise interface.RecordNotFoundException(
-                    f'{t.__name__}: {uuid} not found'
-                )
-            return result[0]
+        return await self._get_model_from_column(
+            t,
+            uuid,
+            "uuid",
+            options,
+            session
+        )
 
     async def _model_uuid2id(self, t: Type[_T], uuid: str, session: AsyncSession | None = None) -> int:
         async with self._ensure_session(session) as session:
@@ -105,7 +134,7 @@ class Repository(interface.Repository):
             if not result_models:
                 return None
 
-            next_cursor = max(result.id for result in result_models)
+            next_cursor = max(result.id for result in result_models) or 0
             return [worker_model.to_entity() for worker_model in result_models], next_cursor
 
     async def get_function_from_uuid(
@@ -131,11 +160,31 @@ class Repository(interface.Repository):
             worker: model.Worker = result[0]
             return worker.to_entity()
 
+    async def match_workers_from_name(
+            self,
+            name: str,
+            limit: int,
+            cursor: int | None = None,
+            session: AsyncSession | None = None
+    ) -> Tuple[List[entities.Worker], int]:
+        async with self._ensure_session(session) as session:
+            session: AsyncSession
+            query = select(model.Worker).options(selectinload(model.Worker.tags)).where(
+                model.Worker.name.like(f"%{name}%"),
+            ).limit(limit)
+            if cursor:
+                query = query.where(model.Worker.id > cursor)
+            result = (await session.execute(query))
+
+            return [worker[0].to_entity() for worker in result], max([worker[0].id for worker in result] + [0])
+
     async def get_task_from_uuid(self, task_uuid: entities.TaskUUID,
                                  session: AsyncSession | None = None) -> entities.Task:
         return await self._get_entity_from_uuid(
             model.Task,
-            task_uuid, session=session
+            task_uuid,
+            options=[selectinload(model.Task.worker), selectinload(model.Task.func)],
+            session=session
         )
 
     async def get_cron_task_from_uuid(
@@ -161,7 +210,12 @@ class Repository(interface.Repository):
             session.add(model.Task(
                 uuid=task.uuid,
                 uuid_in_manager=task.uuid_in_manager,
-                parent_task_uuid=task.parent_task_uuid
+                status=task.status.value,
+                parent_task_uuid=task.parent_task_uuid,
+                worker_id=(await self._get_model_from_uuid(model.Worker, task.worker_uuid, session=session)).id,
+                func_id=(await self._get_model_from_uuid(model.Function, task.func.uuid, session=session)).id,
+                namespace_id=task.func.namespace_id,
+                result_as_state=task.result_as_state
             ))
 
     async def change_task_status(
@@ -171,12 +225,29 @@ class Repository(interface.Repository):
             task = await self._get_model_from_uuid(model.Task, task_uuid, session=session)
             task.status = status.value
 
+    async def change_task_status_from_uuid_in_manager(
+            self,
+            task_uuid_in_manager: entities.TaskUUID,
+            status: entities.TaskStatus,
+            session=None
+    ):
+        async with self._ensure_session(session) as session:
+            session: AsyncSession
+            task = await self._get_model_from_column(
+                model.Task,
+                task_uuid_in_manager,
+                "uuid_in_manager",
+                session=session
+            )
+            task.status = status.value
+
     async def add_func(self, func: entities.Func, session: AsyncSession | None = None):
         async with self._ensure_session(session) as session:
             if func.parameter_schema is not None:
                 schema_id = await self._model_uuid2id(model.ParameterSchema, func.parameter_schema.uuid, session)
             else:
                 schema_id = None
+            # TODO: add tag to func
 
             session.add(model.Function(
                 uuid=func.uuid,
@@ -184,6 +255,7 @@ class Repository(interface.Repository):
                 dependencies=func.dependencies,
                 parameter_schema_id=schema_id,
                 function=func.func,
+                namespace_id=func.namespace_id,
                 name=func.name
             ))
 
@@ -199,13 +271,24 @@ class Repository(interface.Repository):
                 start_time=datetime.now()
             ))
 
-    async def get_worker_from_uuid(self, task_uuid: entities.WorkerUUID,
+    async def get_task_from_uuid_in_manager(self, task_uuid: entities.TaskUUID,
+                                            session: AsyncSession | None = None) -> entities.Task:
+        async with self._ensure_session(session) as session:
+            session: AsyncSession
+            return await self._get_model_from_column(
+                model.Task,
+                value=task_uuid,
+                column="uuid_in_manager",
+                session=session
+            )
+
+    async def get_worker_from_uuid(self, worker_uuid: entities.WorkerUUID,
                                    session: AsyncSession | None = None) -> entities.Task:
         async with self._ensure_session(session) as session:
             session: AsyncSession
             return await self._get_entity_from_uuid(
                 model.Worker,
-                task_uuid,
+                worker_uuid,
                 [selectinload(model.Worker.tags)],
                 session
             )

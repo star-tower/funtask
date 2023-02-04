@@ -14,7 +14,10 @@ class SchedulerService(SchedulerBase):
         self.scheduler = scheduler
 
     async def assign_task(self, assign_task_request: AssignTaskRequest) -> Empty:
-        await self.scheduler.worker_scheduler.assign_task(assign_task_request.cron_task_uuid)
+        if assign_task_request.task_uuid:
+            await self.scheduler.worker_scheduler.assign_task(assign_task_request.task_uuid)
+        if assign_task_request.cron_task_uuid:
+            await self.scheduler.worker_scheduler.assign_cron_task(assign_task_request.cron_task_uuid)
         return Empty()
 
     async def get_task_list(self, empty: Empty) -> GetTaskListResponse:

@@ -14,12 +14,6 @@ class IncreaseWorkersReq:
 
 
 @dataclass
-class BatchQueryReq:
-    limit: int
-    cursor: int | None = Field(nullable=True)
-
-
-@dataclass
 class WorkersWithCursor:
     workers: List[entities.Worker]
     cursor: int
@@ -30,6 +24,8 @@ class NewFuncInstanceReq:
     timeout: int
     dependencies: List[str]
     change_state: bool
+    description: str
+    func_description: str
     func_base64: str | None = Field(nullable=True)
     func_uuid: entities.FuncUUID | None = Field(nullable=True)
     name: str | None = Field(nullable=True)

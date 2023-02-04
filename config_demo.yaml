@@ -99,6 +99,16 @@ config:
     service:
       host: localhost
       port: 2335
+    scheduler_control:
+      type: static
+      leader_node:
+        uuid: leader
+        host: localhost
+        port: 2334
+      worker_nodes:
+        - uuid: worker
+          host: localhost
+          port: 2336
     manager_control:
       type: static
       nodes:

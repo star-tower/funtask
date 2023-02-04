@@ -1,8 +1,10 @@
 import asyncio
 import base64
+import random
 import re
 import time
-from typing import List, Tuple
+import uuid
+from typing import List, Tuple, cast
 
 import dill
 from grpclib.client import Channel
@@ -11,7 +13,7 @@ from dependency_injector.wiring import inject, Provide
 from fastapi import FastAPI, APIRouter
 import uvicorn
 
-from funtask.webserver.model import IncreaseWorkersReq, BatchQueryReq, WorkersWithCursor, NewFuncInstanceReq
+from funtask.webserver.model import IncreaseWorkersReq, WorkersWithCursor, NewFuncInstanceReq
 from funtask.webserver.utils import self_wrapper, SelfPointer
 
 api = APIRouter(prefix='/api', tags=['api'])
@@ -38,13 +40,17 @@ class Webserver:
             rpc_channel_selector: interface.RPCChannelSelector[Channel] = Provide['webserver.rpc_selector'],
             repository: interface.Repository = Provide['webserver.repository'],
             task_worker_manager_rpc: interface.FunTaskManagerRPC = Provide['webserver.manager_rpc'],
+            scheduler_rpc: interface.LeaderSchedulerRPC = Provide['webserver.scheduler_rpc'],
+            scheduler_control: interface.LeaderSchedulerControl = Provide['webserver.scheduler_control'],
             manager_control: interface.ManagerNodeControl = Provide['webserver.manager_control'],
             host: str = Provide['webserver.service.host'],
             port: int = Provide['webserver.service.port']
     ):
         self.channel_selector = rpc_channel_selector
+        self.scheduler_rpc = scheduler_rpc
         self.repository = repository
         self.task_worker_manager_rpc = task_worker_manager_rpc
+        self.scheduler_control = scheduler_control
         self.host = host
         self.manager_control = manager_control
         self.port = port
@@ -84,9 +90,12 @@ class Webserver:
 
     @api.get('/workers', response_model=WorkersWithCursor)
     @self_wrapper(webserver_pointer)
-    async def get_workers(self, limit: int, cursor: int | None = None):
+    async def get_workers(self, limit: int, cursor: int | None = None, fuzzy_name: str | None = None):
         await self.update_selector_nodes()
-        res = await self.repository.get_workers_from_cursor(limit, cursor)
+        if fuzzy_name:
+            res = await self.repository.match_workers_from_name(fuzzy_name, limit, cursor)
+        else:
+            res = await self.repository.get_workers_from_cursor(limit, cursor)
         if res is None:
             return WorkersWithCursor([], 0)
         workers, cursor = res
@@ -95,11 +104,11 @@ class Webserver:
     @api.post('/func_instance')
     @self_wrapper(webserver_pointer)
     async def trigger_func(self, req: NewFuncInstanceReq) -> List[str]:
-        assert (req.worker_uuids is not None) and (req.worker_tags is not None), ValueError(
+        assert (req.worker_uuids is None) or (req.worker_tags is None), ValueError(
             'worker uuid or tags can\'t both exist'
         )
         assert (req.worker_uuids or req.worker_tags) is not None, ValueError('name or tags must exist one')
-        assert (req.func_base64 is None) and (req.func_uuid is None), ValueError('func and func_uuid must exist one')
+        assert (req.func_base64 is None) or (req.func_uuid is None), ValueError('func and func_uuid must exist one')
         await self.update_selector_nodes()
         if req.func_base64:
             func_bytes = _extract_func_bytes(req.func_base64)
@@ -107,7 +116,7 @@ class Webserver:
             func = await self.repository.get_function_from_uuid(req.func_uuid)
             func_bytes = func.func
         else:
-            raise ValueError('func uuid and name both None')
+            raise ValueError('func uuid and value can\'t both None')
 
         if req.worker_uuids is not None:
             worker_uuids = req.worker_uuids
@@ -119,13 +128,45 @@ class Webserver:
 
         res_tasks = []
         for worker_uuid in worker_uuids:
-            task_uuid = await self.task_worker_manager_rpc.dispatch_fun_task(
-                worker_uuid,
-                func_bytes,
-                dependencies=req.dependencies,
-                change_status=req.change_state,
-                timeout=req.timeout,
-                argument=None
+            task_uuid = str(uuid.uuid4())
+            func_uuid = str(uuid.uuid4())
+            async with self.repository.session_ctx() as session:
+                await self.repository.add_func(entities.Func(
+                    uuid=cast(entities.FuncUUID, func_uuid),
+                    func=func_bytes,
+                    dependencies=req.dependencies,
+                    parameter_schema=None,
+                    description=req.func_description,
+                    tags=[],
+                    namespace_id=1,
+                    name=None
+                ), session)
+                await self.repository.add_task(entities.Task(
+                    uuid=cast(entities.TaskUUID, task_uuid),
+                    parent_task_uuid=None,
+                    uuid_in_manager=None,
+                    status=entities.TaskStatus.UNSCHEDULED,
+                    worker_uuid=worker_uuid,
+                    name=req.name,
+                    func=entities.Func(
+                        uuid=cast(entities.FuncUUID, func_uuid),
+                        func=func_bytes,
+                        description=req.func_description,
+                        dependencies=req.dependencies,
+                        tags=[],
+                        name=None,
+                        parameter_schema=None,
+                        namespace_id=1
+                    ),
+                    argument=None,
+                    description=req.description,
+                    result_as_state=False,
+                    timeout=1000
+                ), session)
+            node: entities.SchedulerNode = random.choice(await self.scheduler_control.get_all_nodes())
+            await self.scheduler_rpc.assign_task_to_node(
+                node,
+                task_uuid=cast(entities.TaskUUID, task_uuid)
             )
             res_tasks.append(task_uuid)
         return res_tasks

@@ -4,7 +4,7 @@ from dependency_injector import containers, providers
 
 from funtask.common.common import list_dict2nodes
 from funtask.core.scheduler import Scheduler
-from funtask.providers.leader_scheduler.grpc_leader_scheduler import GRPCLeaderScheduler
+from funtask.providers.leader_scheduler.grpc_leader_scheduler import LeaderSchedulerGRPC
 from funtask.providers.db.sql.infrastructure import Repository
 from funtask.providers.leader_scheduler_control.static_control import StaticSchedulerControl
 from funtask.core import entities
@@ -76,7 +76,7 @@ class SchedulerContainer(containers.DeclarativeContainer):
         )
     )
     leader_scheduler_rpc = providers.Singleton(
-        GRPCLeaderScheduler
+        LeaderSchedulerGRPC
     )
     leader_control = providers.Selector(
         config.scheduler_control.type,

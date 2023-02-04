@@ -389,7 +389,8 @@ class LeaderSchedulerRPC:
     async def assign_task_to_node(
             self,
             node: entities.SchedulerNode,
-            cron_task_uuid: entities.CronTaskUUID,
+            cron_task_uuid: entities.CronTaskUUID | None = None,
+            task_uuid: entities.TaskUUID | None = None,
             start_time: datetime | None = None
     ):
         ...
@@ -485,11 +486,30 @@ class Repository:
         ...
 
     @abstractmethod
+    async def change_task_status_from_uuid_in_manager(
+            self,
+            task_uuid_in_manager: entities.TaskUUID,
+            status: entities.TaskStatus,
+            session=None
+    ):
+        ...
+
+    @abstractmethod
     async def add_func(self, func: entities.Func, session=None):
         ...
 
     @abstractmethod
     async def add_worker(self, worker: entities.Worker, session=None):
+        ...
+
+    @abstractmethod
+    async def match_workers_from_name(
+            self,
+            name: str,
+            limit: int,
+            cursor: int | None = None,
+            session=None
+    ) -> Tuple[List[entities.Worker], int]:
         ...
 
     @abstractmethod
@@ -513,7 +533,11 @@ class Repository:
         ...
 
     @abstractmethod
-    async def get_worker_from_uuid(self, task_uuid: entities.WorkerUUID, session=None) -> entities.Task:
+    async def get_worker_from_uuid(self, worker_uuid: entities.WorkerUUID, session=None) -> entities.Task:
+        ...
+
+    @abstractmethod
+    async def get_task_from_uuid_in_manager(self, task_uuid: entities.TaskUUID, session=None) -> entities.Task:
         ...
 
     @abstractmethod

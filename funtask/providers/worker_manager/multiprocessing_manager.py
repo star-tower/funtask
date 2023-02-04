@@ -38,7 +38,7 @@ class MultiprocessingManager(interface.WorkerManager):
             status_queue=self.task_status_queue,
             control_queue=control_queue,
         ), worker_uuid, self.logger)
-        process = Process(target=lambda: asyncio.run(worker_runner.run()), name=worker_uuid)
+        process = Process(target=lambda: asyncio.run(worker_runner.run()), name=worker_uuid, daemon=True)
         process.start()
         self.worker_id2process[worker_uuid] = process
         return worker_uuid

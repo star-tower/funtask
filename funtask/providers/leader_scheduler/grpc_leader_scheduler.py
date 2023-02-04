@@ -21,17 +21,19 @@ def _datetime2ms_timestamp(t: datetime) -> int:
     return int(t.timestamp() * 1000)
 
 
-class GRPCLeaderScheduler(interface.LeaderSchedulerRPC):
+class LeaderSchedulerGRPC(interface.LeaderSchedulerRPC):
     async def assign_task_to_node(
             self,
             node: entities.SchedulerNode,
-            cron_task_uuid: entities.CronTaskUUID,
+            cron_task_uuid: entities.CronTaskUUID | None = None,
+            task_uuid: entities.TaskUUID | None = None,
             start_time: datetime | None = None
     ):
         stub = _gen_stub(node)
         await stub.assign_task(scheduler_rpc.AssignTaskRequest(
             cron_task_uuid,
-            _datetime2ms_timestamp(start_time)
+            task_uuid,
+            start_time and _datetime2ms_timestamp(start_time)
         ))
 
     async def get_node_task_list(self, node: entities.SchedulerNode) -> List[entities.CronTaskUUID]:

@@ -133,7 +133,8 @@ class Function(Base):
             parameter_schema=parameter_schema,
             description=self.description,
             tags=[],
-            name=self.name
+            name=self.name,
+            namespace_id=self.namespace_id
         )
 
 
@@ -161,7 +162,7 @@ class Task(Base):
     id = Column(BigInteger, primary_key=True,
                 autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False, unique=True)
-    uuid_in_manager = Column(String(36), nullable=False)
+    uuid_in_manager = Column(String(36), nullable=True)
     parent_task_uuid = Column(String(36), nullable=True)
     parent_task_type = Column(Enum(ParentTaskType), nullable=True)
     worker_id = Column(Integer(), ForeignKey('worker.id'), nullable=True)
@@ -174,9 +175,9 @@ class Task(Base):
     result_as_state = Column(Boolean(), nullable=False)
     timeout = Column(Float(), nullable=True)
     description = Column(String(256), nullable=True)
-    result = Column(String(1024), nullable=False)
-    start_time = Column(TIMESTAMP(), nullable=False, index=True)
-    stop_time = Column(TIMESTAMP(), nullable=False, index=True)
+    result = Column(String(1024), nullable=True)
+    start_time = Column(TIMESTAMP(), nullable=True, index=True)
+    stop_time = Column(TIMESTAMP(), nullable=True, index=True)
     namespace_id = Column(Integer, ForeignKey(Namespace.id), nullable=False)
     name = Column(String(24), nullable=True)
     namespace: Namespace = relationship('Namespace')
@@ -189,7 +190,7 @@ class Task(Base):
                 self.parent_task_uuid
             ) if self.parent_task_type == ParentTaskType.TASK else cast(entities.CronTaskUUID, self.parent_task_uuid),
             cast(entities.TaskUUID, self.uuid_in_manager),
-            entities.TaskStatus(self.status),
+            self.status.value,
             cast(entities.WorkerUUID, self.worker.uuid),
             cast(entities.FuncUUID, self.func.uuid),
             self.argument,

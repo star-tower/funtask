@@ -24,8 +24,15 @@ if TYPE_CHECKING:
 
 @dataclass(eq=False, repr=False)
 class AssignTaskRequest(betterproto.Message):
-    cron_task_uuid: str = betterproto.string_field(2)
-    start_ms_timestamp: int = betterproto.uint64_field(3)
+    cron_task_uuid: Optional[str] = betterproto.string_field(
+        2, optional=True, group="_cron_task_uuid"
+    )
+    task_uuid: Optional[str] = betterproto.string_field(
+        3, optional=True, group="_task_uuid"
+    )
+    start_ms_timestamp: Optional[int] = betterproto.uint64_field(
+        4, optional=True, group="_start_ms_timestamp"
+    )
 
 
 @dataclass(eq=False, repr=False)

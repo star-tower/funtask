@@ -50,8 +50,8 @@ class Task:
     func: 'Union[Func, FuncUUID]'
     argument: 'Optional[FuncArgument]'
     result_as_state: bool
-    timeout: float
-    description: str
+    timeout: float | None = None
+    description: str | None = None
     result: Any = None
     name: str | None = None
 
@@ -126,7 +126,8 @@ class Func:
     dependencies: List[str]
     parameter_schema: 'Optional[Union[ParameterSchema, ParameterSchemaUUID]]'
     description: str
-    tags: List[str] = field(default_factory=list)
+    namespace_id: int
+    tags: List['Tag'] = field(default_factory=list)
     name: str | None = None
 
 
@@ -186,7 +187,7 @@ class QueueStrategy:
     full_strategy: QueueFullStrategy
     udf: Func
     udf_extra: Dict[str, Any] | None
-    max_size: float = math.inf
+    max_size: int = math.inf
 
 
 _T = TypeVar('_T')
@@ -228,3 +229,6 @@ class Worker:
     stop_time: datetime | None = None
     name: str | None = None
     tags: List[Tag] = field(default_factory=list)
+
+
+Task.__pydantic_model__.update_forward_refs()
