@@ -13,7 +13,8 @@ from dependency_injector.wiring import inject, Provide
 from fastapi import FastAPI, APIRouter
 import uvicorn
 
-from funtask.webserver.model import IncreaseWorkersReq, WorkersWithCursor, NewFuncInstanceReq
+from funtask.utils.base64_bytes import Base64Bytes
+from funtask.webserver.model import IncreaseWorkersReq, WorkersWithCursor, NewTaskReq, NewFuncReq, FuncWithCursor
 from funtask.webserver.utils import self_wrapper, SelfPointer
 
 api = APIRouter(prefix='/api', tags=['api'])
@@ -96,27 +97,18 @@ class Webserver:
             res = await self.repository.match_workers_from_name(fuzzy_name, limit, cursor)
         else:
             res = await self.repository.get_workers_from_cursor(limit, cursor)
-        if res is None:
-            return WorkersWithCursor([], 0)
         workers, cursor = res
         return WorkersWithCursor(workers, cursor)
 
-    @api.post('/func_instance')
+    @api.post('/task')
     @self_wrapper(webserver_pointer)
-    async def trigger_func(self, req: NewFuncInstanceReq) -> List[str]:
+    async def create_task(self, req: NewTaskReq) -> List[str]:
+        await self.update_selector_nodes()
         assert (req.worker_uuids is None) or (req.worker_tags is None), ValueError(
             'worker uuid or tags can\'t both exist'
         )
         assert (req.worker_uuids or req.worker_tags) is not None, ValueError('name or tags must exist one')
-        assert (req.func_base64 is None) or (req.func_uuid is None), ValueError('func and func_uuid must exist one')
         await self.update_selector_nodes()
-        if req.func_base64:
-            func_bytes = _extract_func_bytes(req.func_base64)
-        elif req.func_uuid:
-            func = await self.repository.get_function_from_uuid(req.func_uuid)
-            func_bytes = func.func
-        else:
-            raise ValueError('func uuid and value can\'t both None')
 
         if req.worker_uuids is not None:
             worker_uuids = req.worker_uuids
@@ -129,38 +121,19 @@ class Webserver:
         res_tasks = []
         for worker_uuid in worker_uuids:
             task_uuid = str(uuid.uuid4())
-            func_uuid = str(uuid.uuid4())
-            async with self.repository.session_ctx() as session:
-                await self.repository.add_func(entities.Func(
-                    uuid=cast(entities.FuncUUID, func_uuid),
-                    func=func_bytes,
-                    dependencies=req.dependencies,
-                    parameter_schema=None,
-                    description=req.func_description,
-                    tags=[],
-                    name=None
-                ), session)
-                await self.repository.add_task(entities.Task(
-                    uuid=cast(entities.TaskUUID, task_uuid),
-                    parent_task_uuid=None,
-                    uuid_in_manager=None,
-                    status=entities.TaskStatus.UNSCHEDULED,
-                    worker_uuid=worker_uuid,
-                    name=req.name,
-                    func=entities.Func(
-                        uuid=cast(entities.FuncUUID, func_uuid),
-                        func=func_bytes,
-                        description=req.func_description,
-                        dependencies=req.dependencies,
-                        tags=[],
-                        name=None,
-                        parameter_schema=None,
-                    ),
-                    argument=None,
-                    description=req.description,
-                    result_as_state=False,
-                    timeout=1000
-                ), session)
+            await self.repository.add_task(entities.Task(
+                uuid=cast(entities.TaskUUID, task_uuid),
+                parent_task_uuid=None,
+                uuid_in_manager=None,
+                status=entities.TaskStatus.UNSCHEDULED,
+                worker_uuid=worker_uuid,
+                name=req.name,
+                func=cast(entities.FuncUUID, req.func_uuid),
+                argument=None,
+                description=req.description,
+                result_as_state=False,
+                timeout=1000
+            ))
             node: entities.SchedulerNode = random.choice(await self.scheduler_control.get_all_nodes())
             await self.scheduler_rpc.assign_task_to_node(
                 node,
@@ -168,6 +141,46 @@ class Webserver:
             )
             res_tasks.append(task_uuid)
         return res_tasks
+
+    @api.post('/func', response_model=entities.Func)
+    @self_wrapper(webserver_pointer)
+    async def add_func(self, req: NewFuncReq) -> entities.Func:
+        func_bytes = _extract_func_bytes(req.func_base64)
+        func_uuid = cast(entities.FuncUUID, str(uuid.uuid4()))
+        func_entity = entities.Func(
+            uuid=cast(entities.FuncUUID, func_uuid),
+            func=Base64Bytes(func_bytes),
+            dependencies=req.dependencies,
+            parameter_schema=None,
+            description=req.description,
+            tags=[],
+            name=req.name
+        )
+        await self.repository.add_func(func_entity)
+        return func_entity
+
+    @api.get('/func', response_model=FuncWithCursor)
+    @self_wrapper(webserver_pointer)
+    async def get_func(self, limit: int, cursor: int | None = None, fuzzy_name: str | None = None) -> FuncWithCursor:
+        if fuzzy_name:
+            funcs, cursor = await self.repository.match_functions_from_name(
+                name=fuzzy_name,
+                limit=limit,
+                cursor=cursor
+            )
+        else:
+            funcs, cursor = await self.repository.get_functions_from_cursor(limit, cursor)
+        return FuncWithCursor(funcs, cursor)
+
+    @api.post('/cron_task')
+    @self_wrapper(webserver_pointer)
+    async def create_cron_task(self):
+        task_uuid = str(uuid.uuid4())
+        await self.repository.add_cron_task(entities.CronTask(
+            uuid=task_uuid,
+            timepoints=[],
+            func=...
+        ))
 
     async def get_task_by_uuid(self, task_uuid: entities.TaskUUID) -> entities.Task | None:
         pass
@@ -197,9 +210,6 @@ class Webserver:
 
     async def trigger_repeated_func_group(self, time_points: entities.TimePoint, func_group: entities.FuncGroup,
                                           argument_group: entities.FuncArgumentGroup) -> entities.CronTaskUUID:
-        pass
-
-    async def add_func(self, func: entities.Func) -> entities.FuncUUID:
         pass
 
     async def add_parameter_schema(self, parameter_schema: entities.ParameterSchema) -> entities.ParameterSchemaUUID:

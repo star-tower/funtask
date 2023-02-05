@@ -495,7 +495,7 @@ class Repository:
         ...
 
     @abstractmethod
-    async def add_func(self, func: entities.Func, session=None):
+    async def add_func(self, func: entities.Func, session=None) -> int:
         ...
 
     @abstractmethod
@@ -513,12 +513,31 @@ class Repository:
         ...
 
     @abstractmethod
+    async def match_functions_from_name(
+            self,
+            name: str,
+            limit: int,
+            cursor: int | None = None,
+            session=None
+    ) -> Tuple[List[entities.Func], int]:
+        ...
+
+    @abstractmethod
+    async def get_functions_from_cursor(
+            self,
+            limit: int,
+            cursor: int | None = None,
+            session=None
+    ) -> Tuple[List[entities.Func], int]:
+        ...
+
+    @abstractmethod
     async def get_workers_from_cursor(
             self,
             limit: int,
             cursor: int | None = None,
             session=None
-    ) -> Tuple[List[entities.Worker], int] | None:
+    ) -> Tuple[List[entities.Worker], int]:
         """
         get n worker entities from cursor, first query cursor can be None
 

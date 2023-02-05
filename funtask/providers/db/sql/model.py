@@ -64,7 +64,7 @@ class Worker(Base):
     tags: List['TagRelation'] = relationship(
         'TagRelation',
         primaryjoin='Worker.uuid == foreign(TagRelation.related_uuid)',
-        backref='Workers'
+        backref='workers'
     )
 
     def to_entity(self) -> entities.Worker:
@@ -114,6 +114,11 @@ class Function(Base):
     dependencies = Column(JSON, nullable=False)
     ref_tasks: List['Task']
     ref_cron_tasks: List['CronTask']
+    tags: List['TagRelation'] = relationship(
+        'TagRelation',
+        primaryjoin='Function.uuid == foreign(TagRelation.related_uuid)',
+        backref='functions'
+    )
 
     def to_entity(self) -> entities.Func:
         parameter_schema = self.parameter_schema
@@ -251,13 +256,6 @@ class TagRelation(Base):
     related_uuid = Column(String(36), nullable=False)
 
     uniq = UniqueConstraint(tag_id, related_uuid)
-
-    worker: Mapped[Optional[Worker]] = relationship(
-        'Worker',
-        foreign_keys=[related_uuid],
-        primaryjoin='foreign(Worker.uuid) == TagRelation.related_uuid',
-        backref='ref_tags'
-    )
 
     @staticmethod
     def tag_relations2entities(tag_relations: List['TagRelation']) -> List[entities.Tag]:

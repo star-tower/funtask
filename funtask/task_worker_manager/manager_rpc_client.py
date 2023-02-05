@@ -122,6 +122,8 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
             except grpc_exceptions.GRPCError as e:
                 if e.status == grpc_exceptions.Status.DEADLINE_EXCEEDED:
                     ...
+                else:
+                    raise e
 
     async def get_task_queue_size(self, worker: entities.WorkerUUID) -> int:
         await self.update_selector_nodes()

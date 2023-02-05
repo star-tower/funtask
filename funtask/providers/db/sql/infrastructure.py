@@ -120,7 +120,7 @@ class Repository(interface.Repository):
             limit: int,
             cursor: int | None = None,
             session: AsyncSession | None = None
-    ) -> Tuple[List[entities.Worker], int] | None:
+    ) -> Tuple[List[entities.Worker], int]:
         async with self._ensure_session(session) as session:
             session: AsyncSession
             query = select(model.Worker).options(selectinload(model.Worker.tags))
@@ -131,11 +131,27 @@ class Repository(interface.Repository):
             results = await session.execute(query.limit(limit))
             result_models: List[model.Worker] = [result[0] for result in results]
 
-            if not result_models:
-                return None
-
-            next_cursor = max(result.id for result in result_models) or 0
+            next_cursor = max([result.id for result in result_models] + [0])
             return [worker_model.to_entity() for worker_model in result_models], next_cursor
+
+    async def get_functions_from_cursor(
+            self,
+            limit: int,
+            cursor: int | None = None,
+            session=None
+    ) -> Tuple[List[entities.Func], int]:
+        async with self._ensure_session(session) as session:
+            session: AsyncSession
+            query = select(model.Function).options(selectinload(model.Function.tags))
+
+            if cursor:
+                query = query.where(model.Function.id > cursor)
+
+            results = await session.execute(query.limit(limit))
+            result_models: List[model.Function] = [result[0] for result in results]
+
+            next_cursor = max([result.id for result in result_models] + [0])
+            return [func_model.to_entity() for func_model in result_models], next_cursor
 
     async def get_function_from_uuid(
             self,
@@ -178,6 +194,24 @@ class Repository(interface.Repository):
 
             return [worker[0].to_entity() for worker in result], max([worker[0].id for worker in result] + [0])
 
+    async def match_functions_from_name(
+            self,
+            name: str,
+            limit: int,
+            cursor: int | None = None,
+            session=None
+    ) -> Tuple[List[entities.Func], int]:
+        async with self._ensure_session(session) as session:
+            session: AsyncSession
+            query = select(model.Worker).options(selectinload(model.Function.tags)).where(
+                model.Function.name.like(f"%{name}%")
+            )
+            if cursor:
+                query = query.where(model.Function.id > cursor)
+            result = (await session.execute(query))
+
+            return [func[0].to_entity() for func in result], max([func[0].id for func in result] + [0])
+
     async def get_task_from_uuid(self, task_uuid: entities.TaskUUID,
                                  session: AsyncSession | None = None) -> entities.Task:
         return await self._get_entity_from_uuid(
@@ -207,13 +241,18 @@ class Repository(interface.Repository):
     async def add_task(self, task: entities.Task, session: AsyncSession | None = None):
         async with self._ensure_session(session) as session:
             session: AsyncSession
+            if isinstance(task.func, entities.Func):
+                func_id = await self.add_func(task.func)
+            else:
+                func_id = (await self._get_model_from_uuid(model.Function, task.func.uuid, session=session)).id
+
             session.add(model.Task(
                 uuid=task.uuid,
                 uuid_in_manager=task.uuid_in_manager,
                 status=task.status.value,
                 parent_task_uuid=task.parent_task_uuid,
                 worker_id=(await self._get_model_from_uuid(model.Worker, task.worker_uuid, session=session)).id,
-                func_id=(await self._get_model_from_uuid(model.Function, task.func.uuid, session=session)).id,
+                func_id=func_id,
                 result_as_state=task.result_as_state
             ))
 
@@ -240,7 +279,7 @@ class Repository(interface.Repository):
             )
             task.status = status.value
 
-    async def add_func(self, func: entities.Func, session: AsyncSession | None = None):
+    async def add_func(self, func: entities.Func, session: AsyncSession | None = None) -> int:
         async with self._ensure_session(session) as session:
             if func.parameter_schema is not None:
                 schema_id = await self._model_uuid2id(model.ParameterSchema, func.parameter_schema.uuid, session)
@@ -248,14 +287,16 @@ class Repository(interface.Repository):
                 schema_id = None
             # TODO: add tag to func
 
-            session.add(model.Function(
+            func_model = model.Function(
                 uuid=func.uuid,
                 description=func.description,
                 dependencies=func.dependencies,
                 parameter_schema_id=schema_id,
                 function=func.func,
                 name=func.name
-            ))
+            )
+            session.add(func_model)
+            return func_model.id
 
     async def add_worker(self, worker: entities.Worker, session: AsyncSession | None = None):
         async with self._ensure_session(session) as session:
