@@ -126,7 +126,6 @@ class Func:
     dependencies: List[str]
     parameter_schema: 'Optional[Union[ParameterSchema, ParameterSchemaUUID]]'
     description: str
-    namespace_id: int
     tags: List['Tag'] = field(default_factory=list)
     name: str | None = None
 
@@ -216,7 +215,6 @@ class WorkerStatus(AutoName):
 @dataclass
 class Tag:
     key: str
-    namespace: str
     value: str | None = Field(nullable=True)
 
 

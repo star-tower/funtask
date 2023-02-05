@@ -138,7 +138,6 @@ class Webserver:
                     parameter_schema=None,
                     description=req.func_description,
                     tags=[],
-                    namespace_id=1,
                     name=None
                 ), session)
                 await self.repository.add_task(entities.Task(
@@ -156,7 +155,6 @@ class Webserver:
                         tags=[],
                         name=None,
                         parameter_schema=None,
-                        namespace_id=1
                     ),
                     argument=None,
                     description=req.description,

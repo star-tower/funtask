@@ -2,6 +2,8 @@ import asyncio
 import time
 from typing import List, cast, AsyncIterator, Dict
 from uuid import uuid4
+
+import grpclib.exceptions as grpc_exceptions
 from grpclib.client import Channel
 from asyncio.exceptions import TimeoutError as AsyncTimeoutError
 import contextlib
@@ -117,6 +119,9 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
                     )
             except AsyncTimeoutError:
                 ...
+            except grpc_exceptions.GRPCError as e:
+                if e.status == grpc_exceptions.Status.DEADLINE_EXCEEDED:
+                    ...
 
     async def get_task_queue_size(self, worker: entities.WorkerUUID) -> int:
         await self.update_selector_nodes()

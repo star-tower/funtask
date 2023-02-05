@@ -214,7 +214,6 @@ class Repository(interface.Repository):
                 parent_task_uuid=task.parent_task_uuid,
                 worker_id=(await self._get_model_from_uuid(model.Worker, task.worker_uuid, session=session)).id,
                 func_id=(await self._get_model_from_uuid(model.Function, task.func.uuid, session=session)).id,
-                namespace_id=task.func.namespace_id,
                 result_as_state=task.result_as_state
             ))
 
@@ -255,7 +254,6 @@ class Repository(interface.Repository):
                 dependencies=func.dependencies,
                 parameter_schema_id=schema_id,
                 function=func.func,
-                namespace_id=func.namespace_id,
                 name=func.name
             ))
 
@@ -446,6 +444,3 @@ class Repository(interface.Repository):
     async def create_model_schema(self):
         async with self.engine.begin() as conn:
             await conn.run_sync(model.Base.metadata.create_all)
-            await conn.execute(
-                insert(model.Namespace).values(name='default')
-            )

@@ -52,12 +52,6 @@ class WithUUID(Protocol):
     uuid: Any
 
 
-class Namespace(Base):
-    __tablename__ = 'namespace'
-    id = Column(Integer(), primary_key=True, autoincrement=True, nullable=False)
-    name = Column(String(32), nullable=False, unique=True)
-
-
 class Worker(Base):
     __tablename__ = 'worker'
     id = Column(Integer(), primary_key=True, autoincrement=True, nullable=False)
@@ -116,7 +110,6 @@ class Function(Base):
     )
     function = Column(VARBINARY(1024), nullable=False)
     name = Column(String(64), nullable=True)
-    namespace_id = Column(Integer, ForeignKey('namespace.id'), nullable=False)
     description = Column(String(256), nullable=True)
     dependencies = Column(JSON, nullable=False)
     ref_tasks: List['Task']
@@ -133,8 +126,7 @@ class Function(Base):
             parameter_schema=parameter_schema,
             description=self.description,
             tags=[],
-            name=self.name,
-            namespace_id=self.namespace_id
+            name=self.name
         )
 
 
@@ -178,9 +170,7 @@ class Task(Base):
     result = Column(String(1024), nullable=True)
     start_time = Column(TIMESTAMP(), nullable=True, index=True)
     stop_time = Column(TIMESTAMP(), nullable=True, index=True)
-    namespace_id = Column(Integer, ForeignKey(Namespace.id), nullable=False)
     name = Column(String(24), nullable=True)
-    namespace: Namespace = relationship('Namespace')
 
     def to_entity(self) -> entities.Task:
         return entities.Task(
@@ -248,8 +238,6 @@ class Tag(Base):
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     tag_name = Column(String(16), nullable=False)
     parent_tag_id = Column(Integer, nullable=True, index=True)
-    namespace_id = Column(Integer, ForeignKey('namespace.id'), nullable=False)
-    namespace: Namespace = relationship(Namespace)
     tag_type = Column(Enum(TagType), nullable=False)
 
     name_parent_uniq = UniqueConstraint(tag_type, tag_name, parent_tag_id)
@@ -281,7 +269,6 @@ class TagRelation(Base):
             entities.Tag(
                 key=parent_tag2name_map[tag_relation.tag.parent_tag_id],
                 value=tag_relation.tag.tag_name,
-                namespace=tag_relation.tag.namespace.name
             ) for tag_relation in tag_relations if tag_relation.tag.parent_tag_id is not None
         ]
 
