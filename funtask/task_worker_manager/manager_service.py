@@ -1,4 +1,5 @@
 from typing import AsyncIterator, cast
+from asyncio import exceptions as asyncio_exceptions
 
 import dill
 from dependency_injector.wiring import Provide, inject
@@ -67,15 +68,19 @@ class ManagerService(TaskWorkerManagerBase):
 
     async def get_queued_status(self, empty: "Empty") -> AsyncIterator["GetQueuedStatusResponse"]:
         while True:
-            status = await self.fun_task_manager.get_queued_status()
-            assert status is not None, ValueError('status cannot be none')
-            yield GetQueuedStatusResponse(StatusReport(
-                worker_uuid=status.worker_uuid,
-                task_uuid=status.task_uuid,
-                serialized_content=dill.dumps(status.content),
-                create_timestamp=status.create_timestamp,
-                **core_status2rpc_status(status.status)
-            ))
+            status = await self.fun_task_manager.get_queued_status(.3)
+            if status is None:
+                return
+            try:
+                yield GetQueuedStatusResponse(StatusReport(
+                    worker_uuid=status.worker_uuid,
+                    task_uuid=status.task_uuid,
+                    serialized_content=dill.dumps(status.content),
+                    create_timestamp=status.create_timestamp,
+                    **core_status2rpc_status(status.status)
+                ))
+            except asyncio_exceptions.TimeoutError:
+                ...
 
 
 class ManagerServiceRunner:

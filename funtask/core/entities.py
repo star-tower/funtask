@@ -77,7 +77,7 @@ class ArgumentGenerateStrategy(AutoName):
 @dataclass
 class ArgumentStrategy:
     strategy: ArgumentGenerateStrategy
-    static_value: 'Optional[FuncArgument]'
+    static_value: Optional['FuncArgument'] | FuncArgumentUUID
     argument_queue: ArgumentQueue | None
     udf: 'Func'
     # part of udf arguments

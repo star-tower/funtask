@@ -122,7 +122,7 @@ class MultiprocessingQueue(Queue, Generic[_T]):
                 if resp.status == 201:
                     if break_ref.if_break_now():
                         break
-                    await asyncio.sleep(0.01)
+                    await asyncio.sleep(.1)
                     continue
                 return _QueueContentEnDe.decode(await resp.text('utf8'))
 

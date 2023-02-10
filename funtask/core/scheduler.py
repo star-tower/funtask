@@ -596,7 +596,7 @@ class Scheduler:
             # is worker scheduler
             else:
                 i = 0
-                async for status_report in self.task_manager_rpc.get_queued_status(0.01):
+                async for status_report in self.task_manager_rpc.get_queued_status():
                     i += 1
                     if status_report is None or i >= self.scheduler_config.as_worker.max_sync_process_queue_number:
                         break
