@@ -14,7 +14,8 @@ from fastapi import FastAPI, APIRouter
 import uvicorn
 
 from funtask.utils.base64_bytes import Base64Bytes
-from funtask.webserver.model import IncreaseWorkersReq, WorkersWithCursor, NewTaskReq, NewFuncReq, FuncWithCursor
+from funtask.webserver.model import IncreaseWorkersReq, WorkersWithCursor, NewTaskReq, NewFuncReq, FuncWithCursor, \
+    NewCronTaskReq
 from funtask.webserver.utils import self_wrapper, SelfPointer
 
 api = APIRouter(prefix='/api', tags=['api'])
@@ -174,12 +175,41 @@ class Webserver:
 
     @api.post('/cron_task')
     @self_wrapper(webserver_pointer)
-    async def create_cron_task(self):
-        task_uuid = str(uuid.uuid4())
+    async def create_cron_task(self, req: NewCronTaskReq):
+        task_uuid = cast(entities.CronTaskUUID, str(uuid.uuid4()))
         await self.repository.add_cron_task(entities.CronTask(
             uuid=task_uuid,
-            timepoints=[],
-            func=...
+            timepoints=[entities.TimePoint(
+                unit=entities.TimeUnit.SECOND,
+                n=1
+            )],
+            func=req.function_uuid,
+            argument_generate_strategy=entities.ArgumentStrategy(
+                strategy=entities.ArgumentGenerateStrategy.STATIC,
+                static_argument=None,
+                argument_queue=None,
+                udf=None,
+                udf_extra=None
+            ),
+            worker_choose_strategy=entities.WorkerStrategy(
+                strategy=entities.WorkerChooseStrategy.STATIC,
+                static_worker=req.worker_uuid,
+                worker_tags=[],
+                udf=None,
+                udf_extra=None
+            ),
+            task_queue_strategy=entities.QueueStrategy(
+                full_strategy=entities.QueueFullStrategy.SKIP,
+                udf=None,
+                udf_extra=None,
+                max_size=100
+            ),
+            description=None,
+            name="",
+            tags=[],
+            disabled=False,
+            result_as_state=False,
+            timeout=-1
         ))
 
     async def get_task_by_uuid(self, task_uuid: entities.TaskUUID) -> entities.Task | None:

@@ -411,6 +411,10 @@ class LeaderSchedulerRPC:
 
 class Cron:
     @abstractmethod
+    async def run(self):
+        ...
+
+    @abstractmethod
     async def every_n_seconds(self, name: str, n: int, task: Callable, at: str | None = None, *args, **kwargs):
         ...
 

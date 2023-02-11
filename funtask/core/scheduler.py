@@ -1,6 +1,7 @@
 import asyncio
 import random
 import uuid
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, cast
 
@@ -10,6 +11,7 @@ from loguru import logger
 from pydantic import Extra
 from pydantic.dataclasses import dataclass
 
+from funtask.common.common import LRUCache
 from funtask.core import interface_and_types as interface
 from funtask.core import entities
 from funtask.core.interface_and_types import StatusReport
@@ -48,15 +50,27 @@ class WorkerScheduler(interface.WorkerScheduler):
         self.cron = cron
         self.argument_queue_factory = argument_queue_factory
         self.lock = lock
+        self.manager_uuid2task_cache = LRUCache(256)
+
+    def _update_task_in_cache(self, cache_k: str, task: entities.Task, update_kwargs: Dict):
+        task_dict = asdict(task)
+        task_dict.update(update_kwargs)
+        self.manager_uuid2task_cache.put(cache_k, entities.Task(**task_dict))
 
     async def process_new_status(self, status_report: StatusReport):
         if isinstance(status_report.status, entities.TaskStatus):
             assert status_report.task_uuid is not None, ValueError(
                 'task uuid is None in status report'
             )
-            task = await self.repository.get_task_from_uuid_in_manager(
-                status_report.task_uuid
-            )
+            try:
+                task = await self.repository.get_task_from_uuid_in_manager(
+                    status_report.task_uuid
+                )
+            except interface.RecordNotFoundException as e:
+                task = self.manager_uuid2task_cache.get(status_report.task_uuid)
+                if task is None:
+                    raise e
+
             # validate status change
             if task.status in (
                     entities.TaskStatus.SKIP, entities.TaskStatus.ERROR, entities.TaskStatus.SUCCESS,
@@ -110,10 +124,12 @@ class WorkerScheduler(interface.WorkerScheduler):
             timeout=task.timeout,
             argument=task.argument
         )
-        await self.repository.update_task(task_uuid, {
+        update_kwargs = {
             'status': entities.TaskStatus.QUEUED.value,
             'uuid_in_manager': task_uuid_in_manager
-        })
+        }
+        self._update_task_in_cache(task_uuid_in_manager, task, update_kwargs)
+        await self.repository.update_task(task_uuid, update_kwargs)
 
     async def remove_cron_task(self, task_uuid: entities.CronTaskUUID) -> bool:
         all_cron_tasks = await self.cron.get_all()
@@ -210,11 +226,10 @@ class WorkerScheduler(interface.WorkerScheduler):
             case entities.WorkerChooseStrategy.STATIC:
                 assert worker_choose_strategy.static_worker is not None, ValueError(
                     "static worker must not None")
-                return worker_choose_strategy.static_worker
-            case entities.WorkerChooseStrategy.RANDOM_FROM_LIST:
-                assert worker_choose_strategy.workers is not None and len(worker_choose_strategy.workers) != 0, \
-                    ValueError("workers must not None")
-                return random.choice(worker_choose_strategy.workers)
+                if isinstance(worker_choose_strategy.static_worker, str):
+                    return worker_choose_strategy.static_worker
+                return worker_choose_strategy.static_worker.uuid
+
             case entities.WorkerChooseStrategy.RANDOM_FROM_WORKER_TAGS:
                 assert worker_choose_strategy.worker_tags is not None, ValueError(
                     "worker tags should not be None")
@@ -253,7 +268,10 @@ class WorkerScheduler(interface.WorkerScheduler):
                     parent_task_uuid=cron_task.uuid,
                     uuid_in_manager=None,
                     status=entities.TaskStatus.SKIP,
-                    worker_uuid=None,
+                    worker_uuid=await self._choose_worker_from_worker_choose_strategy(
+                        cron_task,
+                        cron_task.worker_choose_strategy
+                    ),
                     func=cron_task.func,
                     argument=None,
                     result_as_state=cron_task.result_as_state,
@@ -266,13 +284,17 @@ class WorkerScheduler(interface.WorkerScheduler):
                     parent_task_uuid=cron_task.uuid,
                     uuid_in_manager=None,
                     status=entities.TaskStatus.SCHEDULED,
-                    worker_uuid=None,
+                    worker_uuid=await self._choose_worker_from_worker_choose_strategy(
+                        cron_task,
+                        cron_task.worker_choose_strategy
+                    ),
                     func=cron_task.func,
-                    argument=cron_task.argument_generate_strategy.static_value,
+                    argument=cron_task.argument_generate_strategy.static_argument,
                     result_as_state=cron_task.result_as_state,
                     timeout=cron_task.timeout,
                     description=cron_task.description
                 ))
+                return new_task_uuid
             case entities.ArgumentGenerateStrategy.FROM_QUEUE_END_DROP | \
                  entities.ArgumentGenerateStrategy.FROM_QUEUE_END_SKIP | \
                  entities.ArgumentGenerateStrategy.FROM_QUEUE_END_REPEAT_LATEST:
@@ -290,13 +312,17 @@ class WorkerScheduler(interface.WorkerScheduler):
                         parent_task_uuid=cron_task.uuid,
                         uuid_in_manager=None,
                         status=entities.TaskStatus.SCHEDULED,
-                        worker_uuid=None,
+                        worker_uuid=await self._choose_worker_from_worker_choose_strategy(
+                            cron_task,
+                            cron_task.worker_choose_strategy
+                        ),
                         func=cron_task.func,
                         argument=argument,
                         result_as_state=cron_task.result_as_state,
                         timeout=cron_task.timeout,
                         description=cron_task.description
                     ))
+                    return new_task_uuid
                 else:
                     match argument_strategy.strategy:
                         case entities.ArgumentGenerateStrategy.FROM_QUEUE_END_DROP:
@@ -344,6 +370,7 @@ class WorkerScheduler(interface.WorkerScheduler):
                                 timeout=cron_task.timeout,
                                 description=cron_task.description
                             ))
+                            return new_task_uuid
             case _:
                 raise NotImplementedError(
                     f"not implement strategy {argument_strategy.strategy}")
@@ -380,7 +407,7 @@ class WorkerScheduler(interface.WorkerScheduler):
             if new_task_uuid is None:
                 return
             task_queue_size = await self.funtask_manager_rpc.get_task_queue_size(worker)
-            if task_queue_size > cron_task.task_queue_strategy.max_size:
+            if task_queue_size < cron_task.task_queue_strategy.max_size:
                 await self.assign_task(new_task_uuid)
             else:
                 match queue_strategy.full_strategy:
@@ -463,19 +490,19 @@ class LeaderScheduler(interface.LeaderScheduler):
             self,
             leader_control: interface.LeaderSchedulerControl,
             leader_scheduler_rpc: interface.LeaderSchedulerRPC = Provide['scheduler.leader_scheduler_rpc'],
-            repository: interface.Repository = Provide['repository']
+            repository: interface.Repository = Provide['scheduler.repository']
     ):
         self.leader_control = leader_control
         self.leader_scheduler_rpc: interface.LeaderSchedulerRPC = leader_scheduler_rpc
         self.nodes: List[entities.SchedulerNode] | None = None
-        self.node_responsible_tasks_dict = None
+        self.node_responsible_tasks_dict: Dict[entities.SchedulerNode, List[entities.CronTaskUUID]] | None = None
         self.repository = repository
 
     async def _load_dependencies_if_not_loaded(self):
         if self.nodes is None:
             self.nodes = await self.leader_control.get_all_nodes()
         if self.node_responsible_tasks_dict is None:
-            self.node_responsible_tasks_dict = await self._get_all_node_responsible_tasks(self.nodes)
+            self.node_responsible_tasks_dict = defaultdict(list, await self._get_all_node_responsible_tasks(self.nodes))
 
     async def _get_all_node_responsible_tasks(
             self,
@@ -500,15 +527,18 @@ class LeaderScheduler(interface.LeaderScheduler):
         self.node_responsible_tasks_dict = current_node_responsible_tasks_dict
 
     async def rebalance(self, rebalanced_date: datetime):
+        new_task_uuids = {task.uuid for task in await self.repository.get_all_cron_task()}
+
         if self.nodes is None or self.node_responsible_tasks_dict is None:
             await self._load_dependencies_if_not_loaded()
         assert self.nodes is not None and self.node_responsible_tasks_dict is not None, ValueError(
             'internal error for nodes or responsible dict should not be none'
         )
-        if len(self.nodes) == 1:
+        if len(self.nodes) == 0:
             return
         for node, tasks in self.node_responsible_tasks_dict.items():
             for task_uuid in tasks:
+                new_task_uuids.remove(task_uuid)
                 await self.leader_scheduler_rpc.remove_task_from_node(node, task_uuid, rebalanced_date)
                 await self.leader_scheduler_rpc.assign_task_to_node(
                     random.choice(self.nodes),
@@ -516,6 +546,17 @@ class LeaderScheduler(interface.LeaderScheduler):
                     None,
                     rebalanced_date
                 )
+
+        for new_task_uuid in new_task_uuids:
+            try:
+                assign_node = random.choice(self.nodes)
+                await self.leader_scheduler_rpc.assign_task_to_node(
+                    assign_node,
+                    new_task_uuid
+                )
+                self.node_responsible_tasks_dict[assign_node].append(new_task_uuid)
+            except Exception as e:
+                logger.error(e)
 
 
 @dataclass
@@ -563,6 +604,7 @@ class Scheduler:
             scheduler_config: Dict = Provide['scheduler.config'],
     ):
         self.scheduler_config = SchedulerConfig(**scheduler_config)
+        self.cron = cron
         self.self_node = self_node
         self.leader_control = leader_control
         self.leader_scheduler = LeaderScheduler(
@@ -580,6 +622,7 @@ class Scheduler:
         )
 
     async def run(self):
+        asyncio.create_task(self.cron.run())
         logger.info("scheduler started")
         leader_last_rebalanced_time = datetime.now()
         while True:

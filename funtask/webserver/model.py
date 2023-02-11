@@ -32,6 +32,13 @@ class NewTaskReq:
 
 
 @dataclass
+class NewCronTaskReq:
+    function_uuid: entities.FuncUUID
+    timepoints: List[entities.TimePoint]
+    worker_uuid: entities.WorkerUUID
+
+
+@dataclass
 class NewFuncReq:
     description: str
     dependencies: List[str]

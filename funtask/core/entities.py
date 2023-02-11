@@ -77,17 +77,16 @@ class ArgumentGenerateStrategy(AutoName):
 @dataclass
 class ArgumentStrategy:
     strategy: ArgumentGenerateStrategy
-    static_value: Optional['FuncArgument'] | FuncArgumentUUID
-    argument_queue: ArgumentQueue | None
-    udf: 'Func'
+    static_argument: Optional['FuncArgument'] | FuncArgumentUUID = None
+    argument_queue: ArgumentQueue | None = None
+    udf: Optional['Func'] = None
     # part of udf arguments
-    udf_extra: Dict[str, Any] | None
+    udf_extra: Dict[str, Any] | None = None
 
 
 @unique
 class WorkerChooseStrategy(AutoName):
     STATIC = auto()
-    RANDOM_FROM_LIST = auto()
     RANDOM_FROM_WORKER_TAGS = auto()
     UDF = auto()
 
@@ -95,11 +94,10 @@ class WorkerChooseStrategy(AutoName):
 @dataclass
 class WorkerStrategy:
     strategy: WorkerChooseStrategy
-    static_worker: Optional[WorkerUUID]
-    workers: Optional[List[WorkerUUID]]
-    worker_tags: Optional[List[str]]
-    udf: 'Func'
-    udf_extra: Dict[str, Any] | None
+    static_worker: WorkerUUID | 'Worker' | None = None
+    worker_tags: Optional[List['Tag']] = None
+    udf: Optional['Func'] = None
+    udf_extra: Dict[str, Any] | None = None
 
 
 @dataclass
@@ -113,10 +111,10 @@ class CronTask:
     task_queue_strategy: 'QueueStrategy'
     result_as_state: bool
     timeout: float
-    description: str
     disabled: bool
-    name: str | None = None
-    tags: List[str] = field(default_factory=list)
+    name: str
+    description: str | None = None
+    tags: List['Tag'] = field(default_factory=list)
 
 
 @dataclass
@@ -167,7 +165,7 @@ class TimeUnit(AutoName):
 class TimePoint:
     unit: TimeUnit
     n: int
-    at: str | None
+    at: str | None = None
 
     def __str__(self):
         return f"{self.n}/{self.unit}" + (f"/{self.at}" if self.at is not None else "")
@@ -184,8 +182,8 @@ class QueueFullStrategy(AutoName):
 @dataclass
 class QueueStrategy:
     full_strategy: QueueFullStrategy
-    udf: Func
-    udf_extra: Dict[str, Any] | None
+    udf: Optional['Func'] = None
+    udf_extra: Dict[str, Any] | None = None
     max_size: int = math.inf
 
 
@@ -230,3 +228,6 @@ class Worker:
 
 
 Task.__pydantic_model__.update_forward_refs()
+ArgumentStrategy.__pydantic_model__.update_forward_refs()
+WorkerStrategy.__pydantic_model__.update_forward_refs()
+CronTask.__pydantic_model__.update_forward_refs()

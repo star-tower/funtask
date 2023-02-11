@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from datetime import datetime
 from typing import List, Dict, Any, AsyncIterator, Tuple, Type, TypeVar
 
@@ -15,6 +16,14 @@ from funtask.providers.db.sql.model import EntityConvertable
 _T = TypeVar('_T')
 
 
+def _obj_get_uuid(obj: Any) -> str | None:
+    if obj is None:
+        return None
+    if isinstance(obj, str):
+        return obj
+    return getattr(obj, 'uuid')
+
+
 class Repository(interface.Repository):
     def __init__(
             self,
@@ -24,7 +33,7 @@ class Repository(interface.Repository):
     ):
         self.engine: AsyncEngine = create_async_engine(uri, *args, **kwargs)
         self.session = sessionmaker(
-            self.engine, expire_on_commit=False, class_=AsyncSession
+            self.engine, class_=AsyncSession
         )
 
     @asynccontextmanager
@@ -110,7 +119,7 @@ class Repository(interface.Repository):
         async with self._ensure_session(session) as session:
             session: AsyncSession
             query = select(t.id).where(t.uuid == uuid)
-            result = await session.execute(query)
+            result = (await session.execute(query)).first()
             if not result:
                 raise interface.RecordNotFoundException(f'record uuid: {uuid} of type: {t} not found')
             return result[0]
@@ -163,7 +172,7 @@ class Repository(interface.Repository):
             func_uuid, session=session
         )
 
-    async def get_worker_from_name(self, name: str, session: AsyncSession | None = None) -> entities.Task:
+    async def get_worker_from_name(self, name: str, session: AsyncSession | None = None) -> entities.Worker:
         async with self._ensure_session(session) as session:
             session: AsyncSession
             query = select(model.Worker).where(model.Worker.name == name).options(selectinload(model.Worker.tags))
@@ -234,7 +243,14 @@ class Repository(interface.Repository):
     async def get_all_cron_task(self, session: AsyncSession | None = None) -> List[entities.CronTask]:
         async with self._ensure_session(session) as session:
             result: List[Tuple[model.CronTask]] = (await session.execute(
-                select(model.CronTask)
+                select(model.CronTask).options(
+                    selectinload(model.CronTask.argument_generate_strategy_static_argument),
+                    selectinload(model.CronTask.worker),
+                    selectinload(model.CronTask.worker_choose_strategy_udf),
+                    selectinload(model.CronTask.task_queue_strategy_udf),
+                    selectinload(model.CronTask.func),
+                    selectinload(model.CronTask.tags)
+                )
             )).all()
             return [cronTask[0].to_entity() for cronTask in result]
 
@@ -242,9 +258,9 @@ class Repository(interface.Repository):
         async with self._ensure_session(session) as session:
             session: AsyncSession
             if isinstance(task.func, entities.Func):
-                func_id = await self.add_func(task.func)
-            else:
                 func_id = (await self._get_model_from_uuid(model.Function, task.func.uuid, session=session)).id
+            else:
+                func_id = (await self._get_model_from_uuid(model.Function, task.func, session=session)).id
 
             session.add(model.Task(
                 uuid=task.uuid,
@@ -314,12 +330,12 @@ class Repository(interface.Repository):
                                             session: AsyncSession | None = None) -> entities.Task:
         async with self._ensure_session(session) as session:
             session: AsyncSession
-            return await self._get_model_from_column(
+            return (await self._get_model_from_column(
                 model.Task,
                 value=task_uuid,
                 column="uuid_in_manager",
                 session=session
-            )
+            )).to_entity()
 
     async def get_worker_from_uuid(self, worker_uuid: entities.WorkerUUID,
                                    session: AsyncSession | None = None) -> entities.Task:
@@ -342,38 +358,50 @@ class Repository(interface.Repository):
     async def add_cron_task(self, task: entities.CronTask, session: AsyncSession | None = None):
         async with self._ensure_session(session) as session:
             session: AsyncSession
-            static_value_id = task.argument_generate_strategy.static_value.uuid and await self._model_uuid2id(
+            static_argument_uuid = _obj_get_uuid(task.argument_generate_strategy.static_argument)
+            static_argument_id = static_argument_uuid and await self._model_uuid2id(
                 model.Argument,
-                task.argument_generate_strategy.static_value.uuid,
+                static_argument_uuid,
                 session
             )
-            queue_id = task.argument_generate_strategy.argument_queue and await self._model_uuid2id(
-                model.Function,
-                task.argument_generate_strategy.argument_queue.uuid,
-                session
-            )
-            arg_gen_udf_id = task.argument_generate_strategy.udf and await self._model_uuid2id(
-                model.Function,
-                task.argument_generate_strategy.udf.uuid,
-                session
-            )
-            func_id = await self._model_uuid2id(model.Function, task.func.uuid, session)
 
-            static_worker_id = task.worker_choose_strategy.static_worker and await self._model_uuid2id(
+            queue_uuid = _obj_get_uuid(task.argument_generate_strategy.argument_queue)
+            queue_id = queue_uuid and await self._model_uuid2id(
+                model.Function,
+                queue_uuid,
+                session
+            )
+
+            arg_gen_udf_uuid = _obj_get_uuid(task.argument_generate_strategy.udf)
+            arg_gen_udf_id = arg_gen_udf_uuid and await self._model_uuid2id(
+                model.Function,
+                arg_gen_udf_uuid,
+                session
+            )
+
+            if isinstance(task.func, str):
+                func_id = await self._model_uuid2id(model.Function, task.func, session)
+            else:
+                func_id = await self._model_uuid2id(model.Function, task.func.uuid, session)
+
+            static_worker_uuid = _obj_get_uuid(task.worker_choose_strategy.static_worker)
+            static_worker_id = static_worker_uuid and await self._model_uuid2id(
                 model.Worker,
-                task.worker_choose_strategy.static_worker,
+                static_worker_uuid,
                 session
             )
 
-            worker_choose_udf_id = task.worker_choose_strategy.udf and await self._model_uuid2id(
+            worker_choose_udf_uuid = _obj_get_uuid(task.worker_choose_strategy.udf)
+            worker_choose_udf_id = worker_choose_udf_uuid and await self._model_uuid2id(
                 model.Function,
-                task.worker_choose_strategy.udf.uuid,
+                worker_choose_udf_uuid,
                 session
             )
 
-            task_queue_udf_id = task.task_queue_strategy.udf and await self._model_uuid2id(
+            task_queue_udf_uuid = _obj_get_uuid(task.task_queue_strategy.udf)
+            task_queue_udf_id = task_queue_udf_uuid and await self._model_uuid2id(
                 model.Function,
-                task.task_queue_strategy.udf.uuid,
+                task_queue_udf_uuid,
                 session
             )
 
@@ -382,13 +410,12 @@ class Repository(interface.Repository):
                 name=task.name,
                 function_id=func_id,
                 argument_generate_strategy=task.argument_generate_strategy.strategy.value,
-                argument_generate_strategy_static_value_id=static_value_id,
+                argument_generate_strategy_static_argument_id=static_argument_id,
                 argument_generate_strategy_args_queue_id=queue_id,
                 argument_generate_strategy_udf_id=arg_gen_udf_id,
                 argument_generate_strategy_udf_extra=task.argument_generate_strategy.udf_extra,
                 worker_choose_strategy=task.worker_choose_strategy.strategy.value,
                 worker_choose_strategy_static_worker_id=static_worker_id,
-                worker_choose_strategy_worker_uuid_list=task.worker_choose_strategy.workers,
                 worker_choose_strategy_worker_tags=task.worker_choose_strategy.worker_tags,
                 worker_choose_strategy_udf_id=worker_choose_udf_id,
                 worker_choose_strategy_udf_extra=task.worker_choose_strategy.udf_extra,
@@ -398,6 +425,7 @@ class Repository(interface.Repository):
                 task_queue_strategy_udf_extra=task.task_queue_strategy.udf_extra,
                 result_as_status=task.result_as_state,
                 timeout=task.timeout,
+                timepoints=[asdict(point) for point in task.timepoints],
                 description=task.description,
                 disabled=task.disabled
             ))

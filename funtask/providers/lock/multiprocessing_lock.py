@@ -1,9 +1,11 @@
+import contextlib
 from typing import AsyncIterator
 
 from funtask.core import interface_and_types as interface
 
 
 class MultiprocessingLock(interface.DistributeLock):
+    @contextlib.asynccontextmanager
     async def lock(self, name: str, timeout: float | None = None) -> AsyncIterator[None]:
         yield
 

@@ -1,7 +1,8 @@
+import asyncio
 import time
 from typing import List, Callable, Dict, Any
 import schedule
-from multiprocessing import Process
+from threading import Thread
 
 from funtask.core import interface_and_types as interface
 
@@ -10,33 +11,40 @@ class SchedulerCron(interface.Cron):
     def __init__(self):
         self.scheduler = schedule.Scheduler()
         self.ms_tasks: Dict[str, (int, Callable, List[Any], Dict[str, Any])] = {}
+        self.seconds_tasks: Dict[str, (int, Callable, List[Any], Dict[str, Any])] = {}
         self._keep_run = True
-        process = Process(target=self._run)
-        process.start()
 
     def __del__(self):
         self._keep_run = False
 
-    def _check_and_run(self, ms: int):
-        for run_ms, fun, args, kwargs in self.ms_tasks.values():
-            if ms % run_ms:
-                fun(*args, **kwargs)
-
-    def _run(self):
+    async def run(self):
         ms_count = 1
-        t = time.time()
+        s_count = 1
+        t_ms = time.time()
+        t_s = time.time()
         while self._keep_run:
             curr_time = time.time()
 
             # count ms from start for ms schedule
-            if curr_time - t > .001:
-                t = curr_time
+            if curr_time - t_ms > .001:
+                t_ms = curr_time
                 ms_count += 1
 
-                self._check_and_run(ms_count)
+                for run_ms, fun, args, kwargs in self.ms_tasks.values():
+                    if t_ms % run_ms:
+                        await fun(*args, **kwargs)
+
+            # count ms from start for seconds schedule
+            if curr_time - t_s > 1:
+                t_s = curr_time
+                s_count += 1
+
+                for run_s, fun, args, kwargs in self.seconds_tasks.values():
+                    if t_s % run_s:
+                        await fun(*args, **kwargs)
 
             schedule.run_pending()
-            time.sleep(.0002)
+            await asyncio.sleep(.001)
 
     async def get_all(self) -> List[str]:
         tasks = self.scheduler.get_jobs()
@@ -44,8 +52,7 @@ class SchedulerCron(interface.Cron):
 
     async def every_n_seconds(self, name: str, n: int, task: Callable, at: str | None = None, *args, **kwargs):
         await self.cancel(name)
-        task = self.scheduler.every(n).second.at(at).do(task, *args, **kwargs)
-        task.tag(name)
+        self.seconds_tasks[name] = (n, task, args, kwargs)
 
     async def every_n_minutes(self, name: str, n: int, task: Callable, at: str | None = None, *args, **kwargs):
         await self.cancel(name)

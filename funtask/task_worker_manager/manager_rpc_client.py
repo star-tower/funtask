@@ -134,7 +134,8 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
     async def get_task_queue_size(self, worker: entities.WorkerUUID) -> int:
         await self.update_selector_nodes()
         async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
-            raise NotImplementedError('get task queue size not impl')
+            # TODO
+            return 0
 
 
 def get_report_entity_status(report_dict: Dict) -> entities.TaskStatus | entities.WorkerStatus | None:
