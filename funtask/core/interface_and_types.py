@@ -499,6 +499,15 @@ class Repository:
         ...
 
     @abstractmethod
+    async def change_task_status_from_uuid(
+            self,
+            task_uuid: entities.TaskUUID,
+            status: entities.TaskStatus,
+            session=None
+    ):
+        ...
+
+    @abstractmethod
     async def add_func(self, func: entities.Func, session=None) -> int:
         ...
 

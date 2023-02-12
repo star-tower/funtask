@@ -11,7 +11,6 @@ from loguru import logger
 from pydantic import Extra
 from pydantic.dataclasses import dataclass
 
-from funtask.common.common import LRUCache
 from funtask.core import interface_and_types as interface
 from funtask.core import entities
 from funtask.core.interface_and_types import StatusReport
@@ -50,26 +49,17 @@ class WorkerScheduler(interface.WorkerScheduler):
         self.cron = cron
         self.argument_queue_factory = argument_queue_factory
         self.lock = lock
-        self.manager_uuid2task_cache = LRUCache(256)
-
-    def _update_task_in_cache(self, cache_k: str, task: entities.Task, update_kwargs: Dict):
-        task_dict = asdict(task)
-        task_dict.update(update_kwargs)
-        self.manager_uuid2task_cache.put(cache_k, entities.Task(**task_dict))
+        self.write_db_dispatch_lock = asyncio.Lock()
 
     async def process_new_status(self, status_report: StatusReport):
         if isinstance(status_report.status, entities.TaskStatus):
             assert status_report.task_uuid is not None, ValueError(
                 'task uuid is None in status report'
             )
-            try:
+            async with self.write_db_dispatch_lock:
                 task = await self.repository.get_task_from_uuid_in_manager(
                     status_report.task_uuid
                 )
-            except interface.RecordNotFoundException as e:
-                task = self.manager_uuid2task_cache.get(status_report.task_uuid)
-                if task is None:
-                    raise e
 
             # validate status change
             if task.status in (
@@ -79,10 +69,10 @@ class WorkerScheduler(interface.WorkerScheduler):
                 if status_report.status in (entities.TaskStatus.SCHEDULED, entities.TaskStatus.UNSCHEDULED,
                                             entities.TaskStatus.RUNNING, entities.TaskStatus.QUEUED):
                     raise interface.StatusChangeException(
-                        f"can't change status from {task.status} to {task.status}"
+                        f"can't change status from {task.status} to {status_report.status}"
                     )
-            await self.repository.change_task_status_from_uuid_in_manager(
-                task_uuid_in_manager=status_report.task_uuid,
+            await self.repository.change_task_status_from_uuid(
+                task_uuid=task.uuid,
                 status=status_report.status
             )
         elif status_report.status is None:
@@ -116,20 +106,21 @@ class WorkerScheduler(interface.WorkerScheduler):
             func = task.func
         else:
             func = await self.repository.get_function_from_uuid(func_uuid=task.func)
-        task_uuid_in_manager = await self.funtask_manager_rpc.dispatch_fun_task(
-            worker_uuid=task.worker_uuid,
-            func_task=func.func,
-            dependencies=func.dependencies,
-            change_status=task.result_as_state,
-            timeout=task.timeout,
-            argument=task.argument
-        )
-        update_kwargs = {
-            'status': entities.TaskStatus.QUEUED.value,
-            'uuid_in_manager': task_uuid_in_manager
-        }
-        self._update_task_in_cache(task_uuid_in_manager, task, update_kwargs)
-        await self.repository.update_task(task_uuid, update_kwargs)
+
+        async with self.write_db_dispatch_lock:
+            task_uuid_in_manager = await self.funtask_manager_rpc.dispatch_fun_task(
+                worker_uuid=task.worker_uuid,
+                func_task=func.func,
+                dependencies=func.dependencies,
+                change_status=task.result_as_state,
+                timeout=task.timeout,
+                argument=task.argument
+            )
+            update_kwargs = {
+                'status': entities.TaskStatus.QUEUED.value,
+                'uuid_in_manager': task_uuid_in_manager
+            }
+            await self.repository.update_task(task_uuid, update_kwargs)
 
     async def remove_cron_task(self, task_uuid: entities.CronTaskUUID) -> bool:
         all_cron_tasks = await self.cron.get_all()

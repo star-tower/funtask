@@ -295,6 +295,22 @@ class Repository(interface.Repository):
             )
             task.status = status.value
 
+    async def change_task_status_from_uuid(
+            self,
+            task_uuid: entities.TaskUUID,
+            status: entities.TaskStatus,
+            session=None
+    ):
+        async with self._ensure_session(session) as session:
+            session: AsyncSession
+            task = await self._get_model_from_column(
+                model.Task,
+                task_uuid,
+                "uuid",
+                session=session
+            )
+            task.status = status.value
+
     async def add_func(self, func: entities.Func, session: AsyncSession | None = None) -> int:
         async with self._ensure_session(session) as session:
             if func.parameter_schema is not None:
