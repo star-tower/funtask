@@ -2,7 +2,6 @@ import asyncio
 import time
 from typing import List, Callable, Dict, Any
 import schedule
-from threading import Thread
 
 from funtask.core import interface_and_types as interface
 
@@ -39,7 +38,7 @@ class SchedulerCron(interface.Cron):
                 t_s = curr_time
                 s_count += 1
 
-                for run_s, fun, args, kwargs in self.seconds_tasks.values():
+                for run_s, fun, args, kwargs in self.seconds_tasks.copy().values():
                     if t_s % run_s:
                         await fun(*args, **kwargs)
 

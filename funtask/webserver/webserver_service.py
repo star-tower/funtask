@@ -4,6 +4,7 @@ import random
 import re
 import time
 import uuid
+from dataclasses import asdict
 from typing import List, Tuple, cast
 
 import dill
@@ -171,7 +172,13 @@ class Webserver:
             )
         else:
             funcs, cursor = await self.repository.get_functions_from_cursor(limit, cursor)
-        return FuncWithCursor(funcs, cursor)
+
+        enc_able_funcs = []
+        for func in funcs:
+            func_dict = asdict(func)
+            func_dict['func'] = Base64Bytes(func.func)
+            enc_able_funcs.append(entities.Func(**func_dict))
+        return FuncWithCursor(enc_able_funcs, cursor)
 
     @api.post('/cron_task')
     @self_wrapper(webserver_pointer)

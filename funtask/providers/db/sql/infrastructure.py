@@ -132,7 +132,7 @@ class Repository(interface.Repository):
     ) -> Tuple[List[entities.Worker], int]:
         async with self._ensure_session(session) as session:
             session: AsyncSession
-            query = select(model.Worker).options(selectinload(model.Worker.tags))
+            query = select(model.Worker)
 
             if cursor:
                 query = query.where(model.Worker.id > cursor)
@@ -151,12 +151,12 @@ class Repository(interface.Repository):
     ) -> Tuple[List[entities.Func], int]:
         async with self._ensure_session(session) as session:
             session: AsyncSession
-            query = select(model.Function).options(selectinload(model.Function.tags))
+            query = select(model.Function)
 
             if cursor:
                 query = query.where(model.Function.id > cursor)
 
-            results = await session.execute(query.limit(limit))
+            results = (await session.execute(query.limit(limit))).unique()
             result_models: List[model.Function] = [result[0] for result in results]
 
             next_cursor = max([result.id for result in result_models] + [0])
@@ -175,7 +175,7 @@ class Repository(interface.Repository):
     async def get_worker_from_name(self, name: str, session: AsyncSession | None = None) -> entities.Worker:
         async with self._ensure_session(session) as session:
             session: AsyncSession
-            query = select(model.Worker).where(model.Worker.name == name).options(selectinload(model.Worker.tags))
+            query = select(model.Worker).where(model.Worker.name == name)
             result = (await session.execute(query)).first()
 
             if not result:
@@ -194,7 +194,7 @@ class Repository(interface.Repository):
     ) -> Tuple[List[entities.Worker], int]:
         async with self._ensure_session(session) as session:
             session: AsyncSession
-            query = select(model.Worker).options(selectinload(model.Worker.tags)).where(
+            query = select(model.Worker).where(
                 model.Worker.name.like(f"%{name}%"),
             ).limit(limit)
             if cursor:
@@ -212,21 +212,24 @@ class Repository(interface.Repository):
     ) -> Tuple[List[entities.Func], int]:
         async with self._ensure_session(session) as session:
             session: AsyncSession
-            query = select(model.Worker).options(selectinload(model.Function.tags)).where(
+            query = select(model.Function).where(
                 model.Function.name.like(f"%{name}%")
             )
             if cursor:
                 query = query.where(model.Function.id > cursor)
-            result = (await session.execute(query))
+            result = (await session.execute(query)).unique()
+            funcs = [(func[0].to_entity(), func[0].id) for func in result]
+            if not funcs:
+                return [], 0
+            funcs, func_ids = zip(*funcs)
 
-            return [func[0].to_entity() for func in result], max([func[0].id for func in result] + [0])
+            return funcs, max(list(func_ids) + [0])
 
     async def get_task_from_uuid(self, task_uuid: entities.TaskUUID,
                                  session: AsyncSession | None = None) -> entities.Task:
         return await self._get_entity_from_uuid(
             model.Task,
             task_uuid,
-            options=[selectinload(model.Task.worker), selectinload(model.Task.func)],
             session=session
         )
 
@@ -243,14 +246,7 @@ class Repository(interface.Repository):
     async def get_all_cron_task(self, session: AsyncSession | None = None) -> List[entities.CronTask]:
         async with self._ensure_session(session) as session:
             result: List[Tuple[model.CronTask]] = (await session.execute(
-                select(model.CronTask).options(
-                    selectinload(model.CronTask.argument_generate_strategy_static_argument),
-                    selectinload(model.CronTask.worker),
-                    selectinload(model.CronTask.worker_choose_strategy_udf),
-                    selectinload(model.CronTask.task_queue_strategy_udf),
-                    selectinload(model.CronTask.func),
-                    selectinload(model.CronTask.tags)
-                )
+                select(model.CronTask)
             )).all()
             return [cronTask[0].to_entity() for cronTask in result]
 

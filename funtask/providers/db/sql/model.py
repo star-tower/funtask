@@ -64,8 +64,8 @@ class Worker(Base):
     tags: List['TagRelation'] = relationship(
         'TagRelation',
         primaryjoin='Worker.uuid == foreign(TagRelation.related_uuid)',
-        backref='workers',
-        lazy='joined'
+        lazy='joined',
+        viewonly=True
     )
 
     def to_entity(self) -> entities.Worker:
@@ -108,7 +108,8 @@ class Function(Base):
     parameter_schema: ParameterSchema | None = relationship(
         'ParameterSchema',
         backref='functions',
-        lazy='joined'
+        lazy='joined',
+        viewonly=True
     )
     function = Column(VARBINARY(1024), nullable=False)
     name = Column(String(64), nullable=True)
@@ -119,8 +120,8 @@ class Function(Base):
     tags: List['TagRelation'] = relationship(
         'TagRelation',
         primaryjoin='Function.uuid == foreign(TagRelation.related_uuid)',
-        backref='functions',
-        lazy='joined'
+        lazy='joined',
+        viewonly=True
     )
 
     def to_entity(self) -> entities.Func:
