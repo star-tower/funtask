@@ -225,9 +225,3 @@ class Worker:
     stop_time: datetime | None = None
     name: str | None = None
     tags: List[Tag] = field(default_factory=list)
-
-
-Task.__pydantic_model__.update_forward_refs()
-ArgumentStrategy.__pydantic_model__.update_forward_refs()
-WorkerStrategy.__pydantic_model__.update_forward_refs()
-CronTask.__pydantic_model__.update_forward_refs()

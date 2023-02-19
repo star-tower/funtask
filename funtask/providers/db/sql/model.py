@@ -85,7 +85,7 @@ class ParameterSchema(Base):
     id = Column(Integer(), primary_key=True,
                 autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False, unique=True)
-    functions: List['Function']
+    json_schema = Column(JSON, nullable=False)
 
     def to_entity(self) -> entities.ParameterSchema:
         return entities.ParameterSchema(
