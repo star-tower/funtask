@@ -138,7 +138,7 @@ class Repository(interface.Repository):
                 query = query.where(model.Worker.id > cursor)
 
             results = await session.execute(query.limit(limit))
-            result_models: List[model.Worker] = [result[0] for result in results]
+            result_models: List[model.Worker] = [result[0] for result in results.unique()]
 
             next_cursor = max([result.id for result in result_models] + [0])
             return [worker_model.to_entity() for worker_model in result_models], next_cursor
@@ -247,7 +247,7 @@ class Repository(interface.Repository):
         async with self._ensure_session(session) as session:
             result: List[Tuple[model.CronTask]] = (await session.execute(
                 select(model.CronTask)
-            )).all()
+            )).unique()
             return [cronTask[0].to_entity() for cronTask in result]
 
     async def add_task(self, task: entities.Task, session: AsyncSession | None = None):
