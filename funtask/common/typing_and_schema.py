@@ -41,7 +41,7 @@ def function_parameters2schema(
     >>> res = function_parameters2schema(test_func)
     >>> import json
     >>> json.dumps(res, sort_keys=True)
-    '{"definitions": {"A": {"properties": {"b": {"title": "B", "type": "integer"}, "c": {"title": "C", "type": "string"}, "e": {"$ref": "#/definitions/E"}, "g": {"$ref": "#/definitions/B"}}, "required": ["b", "c", "g", "e"], "title": "A", "type": "object"}, "B": {"properties": {"d": {"title": "D", "type": "integer"}, "f": {"format": "date-time", "title": "F", "type": "string"}}, "required": ["d", "f"], "title": "B", "type": "object"}, "E": {"description": "An enumeration.", "enum": ["a"], "title": "E"}}, "properties": {"a": {"$ref": "#/definitions/A"}, "i": {"title": "I", "type": "string"}, "l": {"title": "L", "type": "integer"}}, "title": "test_func", "type": "object"}'
+    '{"definitions": {"A": {"properties": {"b": {"title": "B", "type": "integer"}, "c": {"title": "C", "type": "string"}, "e": {"$ref": "#/definitions/E"}, "g": {"$ref": "#/definitions/B"}}, "required": ["b", "c", "g", "e"], "title": "A", "type": "object"}, "B": {"properties": {"d": {"title": "D", "type": "integer"}, "f": {"format": "date-time", "title": "F", "type": "string"}}, "required": ["d", "f"], "title": "B", "type": "object"}, "E": {"description": "An enumeration.", "enum": ["a"], "title": "E"}}, "properties": {"a": {"$ref": "#/definitions/A"}, "i": {"title": "I", "type": "string"}, "l": {"title": "L", "type": "integer"}}, "required": ["i", "l", "a"], "title": "test_func", "type": "object"}'
     """
     if model_name is None:
         model_name = func.__name__
@@ -54,8 +54,10 @@ def function_parameters2schema(
             match flags[parameter_sig.annotation]:
                 case ConvertFlag.IGNORE:
                     continue
+        if parameter_sig.annotation is inspect.Parameter.empty:
+            continue
         columns[name] = (parameter_sig.annotation, FieldInfo(
-            default=None if parameter_sig.default is inspect.Parameter.empty else Undefined
+            default=Undefined if parameter_sig.default is inspect.Parameter.empty else parameter_sig.default
         ))
 
     return create_model(model_name, **columns).schema()

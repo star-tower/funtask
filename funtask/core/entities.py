@@ -149,6 +149,7 @@ class FuncGroup:
 @dataclass
 class ParameterSchema:
     uuid: ParameterSchemaUUID
+    json_schema: str
 
 
 @unique

@@ -1,14 +1,17 @@
 import asyncio
 import base64
+import json
 import random
 import re
 import time
 import uuid
 from dataclasses import asdict
-from typing import List, Tuple, cast
+from typing import List, Tuple, cast, Callable
 
 import dill
 from grpclib.client import Channel
+
+from funtask.common.typing_and_schema import function_parameters2schema
 from funtask.core import interface_and_types as interface, entities
 from dependency_injector.wiring import inject, Provide
 from fastapi import FastAPI, APIRouter
@@ -23,6 +26,16 @@ api = APIRouter(prefix='/api', tags=['api'])
 webserver_pointer = SelfPointer()
 
 func_name_re = re.compile(r'def *(\w+) *\(')
+
+
+def _extract_func(func_base64: str) -> Callable:
+    func_str = base64.b64decode(func_base64.encode('utf8')).decode('utf8')
+    name_match_res = func_name_re.findall(func_str.strip())
+    if not name_match_res:
+        raise ValueError('function syntax err, must start with `def ...([*args], [**kwargs]):`')
+    gl_var = {}
+    exec(func_str, gl_var, gl_var)
+    return gl_var[name_match_res[0]]
 
 
 def _extract_func_bytes(func_base64: str) -> bytes:
@@ -160,6 +173,20 @@ class Webserver:
         )
         await self.repository.add_func(func_entity)
         return func_entity
+
+    @api.get('/func_schema', response_model=entities.ParameterSchema)
+    @self_wrapper(webserver_pointer)
+    async def get_func_schema(
+            self,
+            func_base64: str | None
+    ):
+        if func_base64 is not None:
+            func = _extract_func(func_base64)
+            schema = function_parameters2schema(func)
+            return entities.ParameterSchema(
+                uuid=cast(entities.ParameterSchemaUUID, str(uuid.uuid4())),
+                json_schema=json.dumps(schema, indent=1)
+            )
 
     @api.get('/func', response_model=FuncWithCursor)
     @self_wrapper(webserver_pointer)
