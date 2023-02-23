@@ -49,17 +49,15 @@ class WorkerScheduler(interface.WorkerScheduler):
         self.cron = cron
         self.argument_queue_factory = argument_queue_factory
         self.lock = lock
-        self.write_db_dispatch_lock = asyncio.Lock()
 
     async def process_new_status(self, status_report: StatusReport):
         if isinstance(status_report.status, entities.TaskStatus):
             assert status_report.task_uuid is not None, ValueError(
                 'task uuid is None in status report'
             )
-            async with self.write_db_dispatch_lock:
-                task = await self.repository.get_task_from_uuid_in_manager(
-                    status_report.task_uuid
-                )
+            task = await self.repository.get_task_from_uuid(
+                status_report.task_uuid
+            )
 
             # validate status change
             if task.status in (
@@ -107,20 +105,19 @@ class WorkerScheduler(interface.WorkerScheduler):
         else:
             func = await self.repository.get_function_from_uuid(func_uuid=task.func)
 
-        async with self.write_db_dispatch_lock:
-            task_uuid_in_manager = await self.funtask_manager_rpc.dispatch_fun_task(
-                worker_uuid=task.worker_uuid,
-                func_task=func.func,
-                dependencies=func.dependencies,
-                change_status=task.result_as_state,
-                timeout=task.timeout,
-                argument=task.argument
-            )
-            update_kwargs = {
-                'status': entities.TaskStatus.QUEUED.value,
-                'uuid_in_manager': task_uuid_in_manager
-            }
-            await self.repository.update_task(task_uuid, update_kwargs)
+        update_kwargs = {
+            'status': entities.TaskStatus.QUEUED.value
+        }
+        await self.repository.update_task(task_uuid, update_kwargs)
+        await self.funtask_manager_rpc.dispatch_fun_task(
+            worker_uuid=task.worker_uuid,
+            func_task=func.func,
+            dependencies=func.dependencies,
+            change_status=task.result_as_state,
+            timeout=task.timeout,
+            argument=task.argument,
+            task_uuid=task_uuid
+        )
 
     async def remove_cron_task(self, task_uuid: entities.CronTaskUUID) -> bool:
         all_cron_tasks = await self.cron.get_all()
@@ -232,7 +229,6 @@ class WorkerScheduler(interface.WorkerScheduler):
                     await self.repository.add_task(entities.Task(
                         uuid=new_task_uuid,
                         parent_task_uuid=cron_task.uuid,
-                        uuid_in_manager=None,
                         status=entities.TaskStatus.SKIP,
                         worker_uuid=None,
                         func=cron_task.func,
@@ -257,7 +253,6 @@ class WorkerScheduler(interface.WorkerScheduler):
                 await self.repository.add_task(entities.Task(
                     uuid=new_task_uuid,
                     parent_task_uuid=cron_task.uuid,
-                    uuid_in_manager=None,
                     status=entities.TaskStatus.SKIP,
                     worker_uuid=await self._choose_worker_from_worker_choose_strategy(
                         cron_task,
@@ -273,7 +268,6 @@ class WorkerScheduler(interface.WorkerScheduler):
                 await self.repository.add_task(entities.Task(
                     uuid=new_task_uuid,
                     parent_task_uuid=cron_task.uuid,
-                    uuid_in_manager=None,
                     status=entities.TaskStatus.SCHEDULED,
                     worker_uuid=await self._choose_worker_from_worker_choose_strategy(
                         cron_task,
@@ -301,7 +295,6 @@ class WorkerScheduler(interface.WorkerScheduler):
                     await self.repository.add_task(entities.Task(
                         uuid=new_task_uuid,
                         parent_task_uuid=cron_task.uuid,
-                        uuid_in_manager=None,
                         status=entities.TaskStatus.SCHEDULED,
                         worker_uuid=await self._choose_worker_from_worker_choose_strategy(
                             cron_task,
@@ -322,7 +315,6 @@ class WorkerScheduler(interface.WorkerScheduler):
                             await self.repository.add_task(entities.Task(
                                 uuid=new_task_uuid,
                                 parent_task_uuid=cron_task.uuid,
-                                uuid_in_manager=None,
                                 status=entities.TaskStatus.SKIP,
                                 worker_uuid=None,
                                 func=cron_task.func,
@@ -338,7 +330,6 @@ class WorkerScheduler(interface.WorkerScheduler):
                                 await self.repository.add_task(entities.Task(
                                     uuid=new_task_uuid,
                                     parent_task_uuid=cron_task.uuid,
-                                    uuid_in_manager=None,
                                     status=entities.TaskStatus.ERROR,
                                     worker_uuid=None,
                                     func=cron_task.func,
@@ -352,7 +343,6 @@ class WorkerScheduler(interface.WorkerScheduler):
                             await self.repository.add_task(entities.Task(
                                 uuid=new_task_uuid,
                                 parent_task_uuid=cron_task.uuid,
-                                uuid_in_manager=None,
                                 status=entities.TaskStatus.SCHEDULED,
                                 worker_uuid=None,
                                 func=cron_task.func,

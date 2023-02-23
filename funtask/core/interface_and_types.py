@@ -238,6 +238,7 @@ class FunTaskManager:
             func_task: TaskInput,
             change_status=False,
             timeout=None,
+            task_uuid: entities.TaskUUID | None = None,
             *arguments,
             **kwargs
     ) -> entities.TaskUUID:
@@ -305,7 +306,8 @@ class FunTaskManagerRPC:
             dependencies: List[str],
             change_status: bool,
             timeout: float,
-            argument: entities.FuncArgument | None
+            argument: entities.FuncArgument | None,
+            task_uuid: entities.TaskUUID | None = None
     ) -> entities.TaskUUID:
         ...
 
@@ -490,15 +492,6 @@ class Repository:
         ...
 
     @abstractmethod
-    async def change_task_status_from_uuid_in_manager(
-            self,
-            task_uuid_in_manager: entities.TaskUUID,
-            status: entities.TaskStatus,
-            session=None
-    ):
-        ...
-
-    @abstractmethod
     async def change_task_status_from_uuid(
             self,
             task_uuid: entities.TaskUUID,
@@ -569,10 +562,6 @@ class Repository:
         ...
 
     @abstractmethod
-    async def get_task_from_uuid_in_manager(self, task_uuid: entities.TaskUUID, session=None) -> entities.Task:
-        ...
-
-    @abstractmethod
     async def get_worker_from_name(self, name: str, session=None) -> entities.Worker:
         ...
 
@@ -588,15 +577,6 @@ class Repository:
     async def add_func_parameter_schema(
             self,
             func_parameter_schema: entities.ParameterSchema,
-            session=None
-    ):
-        ...
-
-    @abstractmethod
-    async def update_task_uuid_in_manager(
-            self,
-            task_uuid: entities.TaskUUID,
-            task_uuid_in_manager: entities.TaskUUID,
             session=None
     ):
         ...

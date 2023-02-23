@@ -139,7 +139,6 @@ class Webserver:
             await self.repository.add_task(entities.Task(
                 uuid=cast(entities.TaskUUID, task_uuid),
                 parent_task_uuid=None,
-                uuid_in_manager=None,
                 status=entities.TaskStatus.UNSCHEDULED,
                 worker_uuid=worker_uuid,
                 name=req.name,

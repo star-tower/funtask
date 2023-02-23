@@ -44,7 +44,6 @@ class SchedulerNode:
 class Task:
     uuid: TaskUUID
     parent_task_uuid: TaskUUID | CronTaskUUID | None
-    uuid_in_manager: TaskUUID | None
     status: 'TaskStatus'
     worker_uuid: WorkerUUID | None
     func: 'Union[Func, FuncUUID]'

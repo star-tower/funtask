@@ -92,12 +92,13 @@ class FunTaskManager(interface.FunTaskManager):
             func_task: interface.TaskInput,
             change_status=False,
             timeout=None,
+            task_uuid: entities.TaskUUID | None = None,
             *arguments,
             **kwargs
     ) -> entities.TaskUUID:
         assert func_task, Exception(f"func_task can't be {func_task}")
         task_queue = await self.worker_manager.get_task_queue(worker_uuid)
-        task_uuid = cast(entities.TaskUUID, str(uuid_generator()))
+        task_uuid = task_uuid or cast(entities.TaskUUID, str(uuid_generator()))
         await self.task_status_queue.put(
             interface.StatusQueueMessage(
                 worker_uuid, task_uuid, entities.TaskStatus.QUEUED, None)

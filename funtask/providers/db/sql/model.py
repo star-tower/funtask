@@ -163,7 +163,6 @@ class Task(Base):
     id = Column(BigInteger, primary_key=True,
                 autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False, unique=True)
-    uuid_in_manager = Column(String(36), nullable=True)
     parent_task_uuid = Column(String(36), nullable=True)
     parent_task_type = Column(Enum(ParentTaskType), nullable=True)
     worker_id = Column(Integer(), ForeignKey('worker.id'), nullable=True)
@@ -188,7 +187,6 @@ class Task(Base):
                 entities.TaskUUID,
                 self.parent_task_uuid
             ) if self.parent_task_type == ParentTaskType.TASK else cast(entities.CronTaskUUID, self.parent_task_uuid),
-            cast(entities.TaskUUID, self.uuid_in_manager),
             self.status.value,
             cast(entities.WorkerUUID, self.worker.uuid),
             cast(entities.FuncUUID, self.func.uuid),

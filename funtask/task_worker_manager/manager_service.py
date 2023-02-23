@@ -46,6 +46,7 @@ class ManagerService(TaskWorkerManagerBase):
             dill.loads(dispatch_fun_task_request.serialized_fun_task),
             dispatch_fun_task_request.change_status,
             dispatch_fun_task_request.timeout,
+            dispatch_fun_task_request.task_uuid,
             *args,
             **kwargs
         )

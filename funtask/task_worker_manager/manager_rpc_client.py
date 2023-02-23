@@ -70,9 +70,14 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
             res = await rpc.increase_worker(task_worker_manager_rpc.IncreaseWorkerRequest())
             return cast(entities.WorkerUUID, res.worker.uuid)
 
-    async def dispatch_fun_task(self, worker_uuid: entities.WorkerUUID, func_task: bytes, dependencies: List[str],
-                                change_status: bool, timeout: float,
-                                argument: entities.FuncArgument | None) -> entities.TaskUUID:
+    async def dispatch_fun_task(
+            self,
+            worker_uuid: entities.WorkerUUID,
+            func_task: bytes, dependencies: List[str],
+            change_status: bool, timeout: float,
+            argument: entities.FuncArgument | None,
+            task_uuid: entities.TaskUUID | None = None
+    ) -> entities.TaskUUID:
         await self.update_selector_nodes()
         async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
             res = await rpc.dispatch_fun_task(task_worker_manager_rpc.DispatchFunTaskRequest(
@@ -84,7 +89,8 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
                 argument and types.Args(
                     argument.args,
                     [types.KwArgs(k, v) for k, v in argument.kwargs]
-                )
+                ),
+                task_uuid
             ))
             return cast(entities.TaskUUID, res.task.uuid)
 

@@ -27,6 +27,7 @@ message DispatchFunTaskRequest {
   bool change_status = 4;
   optional float timeout = 5;
   Args other_args = 6;
+  optional string task_uuid = 7;
 }
 
 message DispatchFunTaskResponse {

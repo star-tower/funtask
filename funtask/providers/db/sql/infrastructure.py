@@ -260,7 +260,6 @@ class Repository(interface.Repository):
 
             session.add(model.Task(
                 uuid=task.uuid,
-                uuid_in_manager=task.uuid_in_manager,
                 status=task.status.value,
                 parent_task_uuid=task.parent_task_uuid,
                 worker_id=(await self._get_model_from_uuid(model.Worker, task.worker_uuid, session=session)).id,
@@ -273,22 +272,6 @@ class Repository(interface.Repository):
         async with self._ensure_session(session) as session:
             session: AsyncSession
             task = await self._get_model_from_uuid(model.Task, task_uuid, session=session)
-            task.status = status.value
-
-    async def change_task_status_from_uuid_in_manager(
-            self,
-            task_uuid_in_manager: entities.TaskUUID,
-            status: entities.TaskStatus,
-            session=None
-    ):
-        async with self._ensure_session(session) as session:
-            session: AsyncSession
-            task = await self._get_model_from_column(
-                model.Task,
-                task_uuid_in_manager,
-                "uuid_in_manager",
-                session=session
-            )
             task.status = status.value
 
     async def change_task_status_from_uuid(
@@ -337,17 +320,6 @@ class Repository(interface.Repository):
                 last_heart_beat=datetime.now(),
                 start_time=datetime.now()
             ))
-
-    async def get_task_from_uuid_in_manager(self, task_uuid: entities.TaskUUID,
-                                            session: AsyncSession | None = None) -> entities.Task:
-        async with self._ensure_session(session) as session:
-            session: AsyncSession
-            return (await self._get_model_from_column(
-                model.Task,
-                value=task_uuid,
-                column="uuid_in_manager",
-                session=session
-            )).to_entity()
 
     async def get_worker_from_uuid(self, worker_uuid: entities.WorkerUUID,
                                    session: AsyncSession | None = None) -> entities.Task:
@@ -451,17 +423,6 @@ class Repository(interface.Repository):
             session: AsyncSession
             session.add(model.ParameterSchema(
                 uuid=func_parameter_schema.uuid
-            ))
-
-    async def update_task_uuid_in_manager(
-            self, task_uuid: entities.TaskUUID,
-            task_uuid_in_manager: entities.TaskUUID,
-            session: AsyncSession | None = None
-    ):
-        async with self._ensure_session(session) as session:
-            session: AsyncSession
-            await session.execute(update(model.Task).where(model.Task.uuid == task_uuid).values(
-                uuid_in_manager=task_uuid_in_manager
             ))
 
     async def update_task(self, task_uuid: entities.TaskUUID, value: Dict[str, Any], session: AsyncSession = None):

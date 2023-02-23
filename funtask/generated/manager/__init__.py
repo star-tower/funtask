@@ -60,6 +60,9 @@ class DispatchFunTaskRequest(betterproto.Message):
         5, optional=True, group="_timeout"
     )
     other_args: "_Args__" = betterproto.message_field(6)
+    task_uuid: Optional[str] = betterproto.string_field(
+        7, optional=True, group="_task_uuid"
+    )
 
 
 @dataclass(eq=False, repr=False)
