@@ -9,7 +9,6 @@ from grpclib.client import Channel
 from asyncio.exceptions import TimeoutError as AsyncTimeoutError
 import contextlib
 
-from grpclib.metadata import Deadline
 from loguru import logger
 
 from funtask.generated import manager as task_worker_manager_rpc
@@ -68,7 +67,7 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
         await self.update_selector_nodes()
         async with get_rpc(self.rpc_selector, bytes_uuid()) as rpc:
             res = await rpc.increase_worker(task_worker_manager_rpc.IncreaseWorkerRequest())
-            return cast(entities.WorkerUUID, res.worker.uuid)
+            return cast(entities.WorkerUUID, res.worker_uuid.uuid)
 
     async def dispatch_fun_task(
             self,
@@ -129,13 +128,15 @@ class ManagerRPCClient(interface.FunTaskManagerRPC):
                         content=status_report.serialized_content,
                         create_timestamp=status_report.create_timestamp
                     )
-            except AsyncTimeoutError:
+            except (AsyncTimeoutError, grpc_exceptions.StreamTerminatedError):
                 ...
             except grpc_exceptions.GRPCError as e:
                 if e.status == grpc_exceptions.Status.DEADLINE_EXCEEDED:
                     ...
                 else:
                     logger.error(str(e) + '\n' + traceback.format_exc())
+            except Exception as e:
+                logger.error(str(e) + '\n' + traceback.format_exc())
 
     async def get_task_queue_size(self, worker: entities.WorkerUUID) -> int:
         await self.update_selector_nodes()

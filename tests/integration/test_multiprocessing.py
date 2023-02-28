@@ -5,7 +5,7 @@ from typing import Dict, Generator
 from funtask.core.interface_and_types import Logger
 from funtask.core.entities import TaskStatus, WorkerStatus
 from funtask.core.task_worker_manager import FunTaskManager
-from funtask.providers.loggers.std import StdLogger
+from funtask.providers.loggers.rotate_file import RotateFileLogger
 from funtask.providers.queue.multiprocessing_queue import MultiprocessingQueue, MultiprocessingQueueFactory
 from funtask.providers.worker_manager.multiprocessing_manager import MultiprocessingManager
 import pytest
@@ -27,7 +27,7 @@ def manager() -> Generator[FunTaskManager, None, None]:
     task_status_queue = MultiprocessingQueue()
     manager = FunTaskManager(
         worker_manager=MultiprocessingManager(
-            StdLogger(),
+            RotateFileLogger(),
             task_queue_factory=MultiprocessingQueueFactory().factory,
             control_queue_factory=MultiprocessingQueueFactory().factory,
             task_status_queue=task_status_queue

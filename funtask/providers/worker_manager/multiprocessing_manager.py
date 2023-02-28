@@ -3,11 +3,11 @@ import uuid
 
 from multiprocessing import Process
 import multiprocessing
-from typing import Dict
+from typing import Dict, cast
 
 from funtask.utils.namespace import with_namespace
 from funtask.core.worker import Worker
-from funtask.core import interface_and_types as interface
+from funtask.core import interface_and_types as interface, entities
 
 multiprocessing.set_start_method('fork')
 
@@ -30,7 +30,7 @@ class MultiprocessingManager(interface.WorkerManager):
     async def increase_worker(
             self
     ) -> str:
-        worker_uuid = str(uuid.uuid4())
+        worker_uuid = cast(entities.WorkerUUID, str(uuid.uuid4()))
         task_queue = self.task_queue_factory(with_namespace('task_queue', worker_uuid))
         control_queue = self.control_queue_factory(with_namespace('control_queue', worker_uuid))
         worker_runner = Worker(interface.WorkerQueue(

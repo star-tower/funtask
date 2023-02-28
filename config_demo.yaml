@@ -1,11 +1,24 @@
+.logger: &logger
+  type: file
+  repository:
+    type: sql
+    uri: mysql+aiomysql://root:zqqqqz2000@127.0.0.1:3306/funtask
+  log_dir: /tmp/funtask_log
+  rotate_line_num: 5000
+
+.repository: &repository
+  type: sql
+  uri: mysql+aiomysql://root:zqqqqz2000@127.0.0.1:3306/funtask
+
+.queue: &queue
+  type: multiprocessing
+  host: localhost
+  port: 3333
+
 config:
   task_worker_manager:
-    logger:
-      type: std
-    queue:
-      type: multiprocessing
-      host: localhost
-      port: 3333
+    logger: *logger
+    queue: *queue
     manager:
       type: multiprocessing
     rpc:
@@ -20,14 +33,10 @@ config:
       port: 2336
     rpc_selector:
       type: hash
-    repository:
-      uri: mysql+aiomysql://root:zqqqqz2000@127.0.0.1:3306/funtask
+    repository: *repository
     cron_scheduler:
       type: schedule
-    argument_queue:
-      type: multiprocessing
-      host: localhost
-      port: 3333
+    argument_queue: *queue
     lock:
       type: multiprocessing
     manager_control:
@@ -65,14 +74,10 @@ config:
           uuid: manager
     rpc_selector:
       type: hash
-    repository:
-      uri: mysql+aiomysql://root:zqqqqz2000@127.0.0.1:3306/funtask
+    repository: *repository
     cron_scheduler:
       type: schedule
-    argument_queue:
-      type: multiprocessing
-      host: localhost
-      port: 3333
+    argument_queue: *queue
     lock:
       type: multiprocessing
     scheduler_control:
@@ -94,8 +99,7 @@ config:
   webserver:
     rpc_selector:
       type: hash
-    repository:
-      uri: mysql+aiomysql://root:zqqqqz2000@127.0.0.1:3306/funtask
+    repository: *repository
     service:
       host: localhost
       port: 2335

@@ -3,7 +3,7 @@ from typing import List, Dict
 from dependency_injector import containers, providers
 
 from funtask.common.common import list_dict2nodes
-from funtask.core import entities
+from funtask.core import entities, interface_and_types as interface
 from funtask.providers.leader_scheduler.grpc_leader_scheduler import LeaderSchedulerGRPC
 from funtask.providers.leader_scheduler_control.static_control import StaticSchedulerControl
 from funtask.providers.manager_control.static_control import StaticManagerControl
@@ -20,9 +20,12 @@ def generate_nodes(nodes: List[Dict]) -> List[entities.SchedulerNode]:
 
 class WebServerContainer(containers.DeclarativeContainer):
     config = providers.Configuration()
-    repository = providers.Singleton(
-        Repository,
-        uri=config.repository.uri
+    repository: interface.Repository = providers.Selector(
+        config.repository.type,
+        sql=providers.Singleton(
+            Repository,
+            uri=config.repository.uri
+        )
     )
     scheduler_rpc = providers.Singleton(
         LeaderSchedulerGRPC

@@ -7,7 +7,7 @@ from funtask.core.scheduler import Scheduler
 from funtask.providers.leader_scheduler.grpc_leader_scheduler import LeaderSchedulerGRPC
 from funtask.providers.db.sql.infrastructure import Repository
 from funtask.providers.leader_scheduler_control.static_control import StaticSchedulerControl
-from funtask.core import entities
+from funtask.core import entities, interface_and_types as interface
 from funtask.providers.cron.schedule_cron import SchedulerCron
 from funtask.providers.manager_control.static_control import StaticManagerControl
 from funtask.providers.queue.multiprocessing_queue import MultiprocessingQueueFactory
@@ -51,9 +51,12 @@ class SchedulerContainer(containers.DeclarativeContainer):
         rpc_selector=rpc_selector,
         manager_control=manager_control
     )
-    repository = providers.Singleton(
-        Repository,
-        uri=config.repository.uri
+    repository: interface.Repository = providers.Selector(
+        config.repository.type,
+        sql=providers.Singleton(
+            Repository,
+            uri=config.repository.uri
+        )
     )
     cron = providers.Selector(
         config.cron_scheduler.type,

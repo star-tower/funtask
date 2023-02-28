@@ -9,6 +9,7 @@ from typing import Callable, List, Generic, TypeVar, Dict, AsyncIterator, Tuple,
 from mypy_extensions import VarArg
 from dataclasses import dataclass
 from funtask.core import entities
+from funtask.utils.async_utils import run_async_sync
 from funtask.utils.enum_utils import AutoName
 
 
@@ -110,10 +111,75 @@ class LogLevel(AutoName):
     ERROR = auto()
 
 
+@unique
+class LogType(AutoName):
+    TEXT = auto()
+    MARKDOWN = auto()
+    HTML = auto()
+
+
 class Logger:
     @abstractmethod
-    async def log(self, msg: str, level: LogLevel, tags: List[str]):
+    async def with_worker(self, worker: entities.WorkerUUID) -> 'Logger':
+        """
+        generate a new logger for specific worker
+        :param worker: worker uuid
+        :return: new logger
+        """
         ...
+
+    @abstractmethod
+    async def with_task(self, task: entities.TaskUUID) -> 'Logger':
+        """
+        generate a new logger for specific task
+        :param task: task uuid
+        :return: new logger
+        """
+        ...
+
+    @abstractmethod
+    async def create_model_schema(self):
+        ...
+
+    @abstractmethod
+    async def drop_model_schema(self):
+        ...
+
+    @abstractmethod
+    @asynccontextmanager
+    async def task_context(self, task_uuid: entities.TaskUUID):
+        ...
+
+    @abstractmethod
+    async def log(self, msg: str, level: LogLevel, tags: List[str], type_: LogType = LogType.TEXT):
+        ...
+
+    async def info(self, msg: str, tags: List[str], type_: LogType = LogType.TEXT):
+        await self.log(msg, LogLevel.INFO, tags, type_)
+
+    async def debug(self, msg: str, tags: List[str], type_: LogType = LogType.TEXT):
+        await self.log(msg, LogLevel.DEBUG, tags, type_)
+
+    async def warning(self, msg: str, tags: List[str], type_: LogType = LogType.TEXT):
+        await self.log(msg, LogLevel.WARNING, tags, type_)
+
+    async def error(self, msg: str, tags: List[str], type_: LogType = LogType.TEXT):
+        await self.log(msg, LogLevel.ERROR, tags, type_)
+
+    def sync_log(self, msg: str, level: LogLevel, tags: List[str], type_: LogType = LogType.TEXT):
+        run_async_sync(self.log(msg, level, tags, type_))
+
+    def sync_info(self, msg: str, tags: List[str], type_: LogType = LogType.TEXT):
+        run_async_sync(self.info(msg, tags, type_))
+
+    def sync_debug(self, msg: str, tags: List[str], type_: LogType = LogType.TEXT):
+        run_async_sync(self.debug(msg, tags, type_))
+
+    def sync_warning(self, msg: str, tags: List[str], type_: LogType = LogType.TEXT):
+        run_async_sync(self.debug(msg, tags, type_))
+
+    def sync_error(self, msg: str, tags: List[str], type_: LogType = LogType.TEXT):
+        run_async_sync(self.error(msg, tags, type_))
 
 
 class WorkerManager:

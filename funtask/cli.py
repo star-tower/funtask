@@ -5,6 +5,7 @@ import fire as fire
 from funtask.scheduler.scheduler_service import SchedulerServiceRunner
 from funtask.webserver import webserver_service
 from funtask.dependency_container import DependencyContainer
+from funtask.core import interface_and_types as interface
 from loguru import logger
 
 from funtask.task_worker_manager.manager_service import ManagerServiceRunner
@@ -114,15 +115,18 @@ class Funtask:
         # init
         logger.info('preparing...')
         container = gen_container(config, 'webserver')
-        repo = container.webserver().repository()
+        repo: interface.Repository = container.webserver().repository()
+        manager_logger: interface.Logger = gen_container(config, 'task_worker_manager').task_worker_manager().logger()
 
         # drop all table
         logger.info('drop all tables')
         await repo.drop_model_schema()
+        await manager_logger.drop_model_schema()
 
         # create all table
         logger.info('creating tables according schema')
         await repo.create_model_schema()
+        await manager_logger.create_model_schema()
 
         logger.info('done.')
 
