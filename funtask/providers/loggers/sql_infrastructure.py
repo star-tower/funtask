@@ -79,4 +79,4 @@ class Repository(rotate_file.Repository, BaseSQLRepository):
 
     async def drop_model_schema(self):
         async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(Base.metadata.drop_all)
