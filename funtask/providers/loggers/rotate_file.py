@@ -156,6 +156,9 @@ class RotateFileLogger(Logger):
             sys.stdout = self.hooked_io
 
     async def log(self, msg: str, level: LogLevel, tags: List[str], type_: LogType = LogType.TEXT):
+        self.sync_log(msg, level, tags, type_)
+
+    def sync_log(self, msg: str, level: LogLevel, tags: List[str], type_: LogType = LogType.TEXT):
         assert self.hooked_io, AssertionError('hooked io is None, worker uuid must be set before log')
         self._hook_io()
         tags = tags or ["default"]

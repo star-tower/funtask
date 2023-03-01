@@ -179,6 +179,7 @@ class Worker:
                         e
                     )
                 )
+                print(str(e) + '\n' + traceback.format_exc())
                 await logger.error(
                     str(e) + '\n' + traceback.format_exc(),
                     ["task", "exception"]
