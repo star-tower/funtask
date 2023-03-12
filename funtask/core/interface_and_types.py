@@ -550,6 +550,41 @@ class Repository:
         ...
 
     @abstractmethod
+    async def get_brief_tasks_from_cursor(
+            self,
+            begin_time: datetime,
+            worker_inactive2dead_second: int,
+            end_time: datetime | None = None,
+            worker_uuid: entities.WorkerUUID | None = None,
+            include_cross_task: bool = False,
+            limit: int | None = None,
+            cursor: int | None = None,
+            session=None
+    ) -> Tuple[List[entities.Task], int]:
+        """
+        get the brief task from a begin_time and end_time, can filter by a specific worker
+        :param begin_time: begin time of the query, result task's create_time gt this value
+        :param worker_inactive2dead_second: time interval of current to last heart beat to determine if a worker dead, dead
+        worker's running function will not show
+        :param end_time: end time of the query, result task's create_time lt this value
+        :param worker_uuid: filter the worker uuid, will only return the task running(ed) on this worker
+        :param include_cross_task: if this option is true, any task cross the time range will as result
+        :param limit: limit the return size of filter
+        :param cursor: for next query, will return the part of remaining task(if limit is set)
+        :param session: session of repository
+        :return: tuple of [Tasks, cursor]
+        """
+        ...
+
+    @abstractmethod
+    async def update_task_start_time(self, task_uuid: entities.TaskUUID, start_time: datetime, session=None):
+        ...
+
+    @abstractmethod
+    async def update_task_stop_time(self, task_uuid: entities.TaskUUID, stop_time: datetime, session=None):
+        ...
+
+    @abstractmethod
     async def add_task(self, task: entities.Task, session=None):
         ...
 

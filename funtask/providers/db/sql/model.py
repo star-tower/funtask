@@ -5,18 +5,12 @@ from typing import List, cast, Generic, TypeVar, Protocol, Any, Optional
 import dill
 from sqlalchemy import Column, Integer, String, ForeignKey, Enum, VARBINARY, Boolean, Float, BigInteger, JSON, \
     TIMESTAMP, UniqueConstraint
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base, relationship, Mapped
 
 from funtask.core import entities
 from funtask.utils.enum_utils import AutoName
 
 Base = declarative_base()
-
-
-@unique
-class ParentTaskType(AutoName):
-    TASK = auto()
-    CRON_TASK = auto()
 
 
 @unique
@@ -61,8 +55,7 @@ class Worker(Base):
     last_heart_beat = Column(TIMESTAMP(), nullable=False, index=True)
     start_time = Column(TIMESTAMP(), nullable=False, index=True)
     stop_time = Column(TIMESTAMP(), nullable=True, index=True)
-    tags: List['TagRelation'] = relationship(
-        'TagRelation',
+    tags: Mapped[List['TagRelation']] = relationship(
         primaryjoin='Worker.uuid == foreign(TagRelation.related_uuid)',
         lazy='joined',
         viewonly=True
@@ -105,8 +98,7 @@ class Function(Base):
         ),
         nullable=True
     )
-    parameter_schema: ParameterSchema | None = relationship(
-        'ParameterSchema',
+    parameter_schema: Mapped[ParameterSchema | None] = relationship(
         backref='functions',
         lazy='joined',
         viewonly=True
@@ -115,10 +107,7 @@ class Function(Base):
     name = Column(String(64), nullable=True)
     description = Column(String(256), nullable=True)
     dependencies = Column(JSON, nullable=False)
-    ref_tasks: List['Task']
-    ref_cron_tasks: List['CronTask']
-    tags: List['TagRelation'] = relationship(
-        'TagRelation',
+    tags: Mapped[List['TagRelation']] = relationship(
         primaryjoin='Function.uuid == foreign(TagRelation.related_uuid)',
         lazy='joined',
         viewonly=True
@@ -164,38 +153,56 @@ class Task(Base):
                 autoincrement=True, nullable=False)
     uuid = Column(String(36), nullable=False, unique=True)
     parent_task_uuid = Column(String(36), nullable=True)
-    parent_task_type = Column(Enum(ParentTaskType), nullable=True)
+    parent_task_type = Column(Enum(entities.TaskType), nullable=True)
     worker_id = Column(Integer(), ForeignKey('worker.id'), nullable=True)
-    worker: Worker = relationship('Worker', lazy='joined')
-    status = Column(Enum(TaskStatus), nullable=False)
+    worker: Mapped[Worker] = relationship(
+        lazy='joined',
+        uselist=False,
+        primaryjoin='Task.worker_id == foreign(Worker.id)',
+        viewonly=True
+    )
+    status = Column(Enum(entities.TaskStatus), nullable=False)
     func_id = Column(BigInteger(), ForeignKey('function.id'), nullable=False)
-    func: Function = relationship('Function', backref="ref_tasks", lazy='joined')
+    func: Mapped[Function] = relationship(
+        backref="ref_tasks",
+        lazy='joined',
+        uselist=False,
+        primaryjoin='Task.func_id == foreign(Function.id)',
+        viewonly=True
+    )
     argument_id = Column(ForeignKey(Argument.id))
-    argument: Argument = relationship('Argument', lazy='joined')
+    argument: Mapped[Argument] = relationship(
+        lazy='joined',
+        primaryjoin='Task.argument_id == foreign(Argument.id)',
+        uselist=False,
+        viewonly=True
+    )
     result_as_state = Column(Boolean(), nullable=False)
     timeout = Column(Float(), nullable=True)
     description = Column(String(256), nullable=True)
     result = Column(String(1024), nullable=True)
+    create_time = Column(TIMESTAMP(), nullable=False, index=True)
     start_time = Column(TIMESTAMP(), nullable=True, index=True)
     stop_time = Column(TIMESTAMP(), nullable=True, index=True)
     name = Column(String(24), nullable=True)
 
     def to_entity(self) -> entities.Task:
         return entities.Task(
-            cast(entities.TaskUUID, self.uuid),
-            cast(
-                entities.TaskUUID,
-                self.parent_task_uuid
-            ) if self.parent_task_type == ParentTaskType.TASK else cast(entities.CronTaskUUID, self.parent_task_uuid),
-            self.status.value,
-            cast(entities.WorkerUUID, self.worker.uuid),
-            cast(entities.FuncUUID, self.func.uuid),
-            self.argument,
-            self.result_as_state,
-            self.timeout,
-            self.description,
-            self.result,
-            self.name
+            uuid=cast(entities.TaskUUID, self.uuid),
+            parent_task_uuid=self.parent_task_uuid,  # type: ignore
+            parent_task_type=self.parent_task_type,
+            status=self.status.value,
+            worker_uuid=cast(entities.WorkerUUID, self.worker.uuid),
+            func=cast(entities.FuncUUID, self.func.uuid),
+            argument=self.argument and self.argument.to_entity(),
+            result_as_state=self.result_as_state,
+            create_time=self.create_time,
+            start_time=self.start_time,
+            stop_time=self.stop_time,
+            timeout=self.timeout,
+            description=self.description,
+            result=self.result,
+            name=self.name
         )
 
 
@@ -254,7 +261,7 @@ class TagRelation(Base):
     __tablename__ = 'tag_relation'
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     tag_id = Column(Integer, ForeignKey('tag.id'), nullable=False)
-    tag: Tag = relationship(Tag, lazy='joined')
+    tag: Mapped[Tag] = relationship(lazy='joined')
     related_uuid = Column(String(36), nullable=False)
 
     uniq = UniqueConstraint(tag_id, related_uuid)
@@ -286,8 +293,7 @@ class CronTask(Base):
     timepoints = Column(JSON, nullable=False)
     argument_generate_strategy = Column(Enum(ArgumentStrategy), nullable=False)
     argument_generate_strategy_static_argument_id = Column(ForeignKey('argument.id'), nullable=True)
-    argument_generate_strategy_static_argument: Optional[Argument] = relationship(
-        'Argument',
+    argument_generate_strategy_static_argument: Mapped[Argument | None] = relationship(
         foreign_keys=[argument_generate_strategy_static_argument_id],
         lazy='joined'
     )
@@ -311,8 +317,7 @@ class CronTask(Base):
         ForeignKey('worker.id'),
         nullable=True
     )
-    worker: Worker = relationship(
-        'Worker',
+    worker: Mapped[Worker] = relationship(
         foreign_keys=[worker_choose_strategy_static_worker_id],
         lazy="joined"
     )
@@ -323,8 +328,7 @@ class CronTask(Base):
         ForeignKey('function.id'),
         nullable=True
     )
-    worker_choose_strategy_udf: Function = relationship(
-        'Function',
+    worker_choose_strategy_udf: Mapped[Function] = relationship(
         foreign_keys=[worker_choose_strategy_udf_id],
         lazy="joined"
     )
@@ -337,8 +341,7 @@ class CronTask(Base):
         ForeignKey('function.id'),
         nullable=True
     )
-    task_queue_strategy_udf: Function = relationship(
-        'Function',
+    task_queue_strategy_udf: Mapped[Function] = relationship(
         foreign_keys=[task_queue_strategy_udf_id],
         lazy="joined"
     )
@@ -347,14 +350,12 @@ class CronTask(Base):
     timeout = Column(Float(), nullable=True)
     description = Column(String(256), nullable=True)
     disabled = Column(Boolean(), nullable=False)
-    func: Function = relationship(
-        'Function',
+    func: Mapped[Function] = relationship(
         foreign_keys=[function_id],
         backref="ref_corn_tasks",
         lazy="joined"
     )
-    tags: List['TagRelation'] = relationship(
-        'TagRelation',
+    tags: Mapped[List['TagRelation']] = relationship(
         primaryjoin='CronTask.uuid == foreign(TagRelation.related_uuid)',
         lazy="joined"
     )

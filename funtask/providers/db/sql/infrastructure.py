@@ -1,11 +1,10 @@
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Tuple, Type, TypeVar
-
 from sqlalchemy import and_
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, aliased
+from sqlalchemy.orm import selectinload, Query, Load, lazyload, load_only
 from sqlalchemy.sql import select, update, or_, functions as fn
 
 from funtask.common.sql import BaseSQLRepository
@@ -34,6 +33,7 @@ class Repository(BaseSQLRepository, interface.Repository):
         async with self._ensure_session(session) as session:
             session: AsyncSession
             query = select(model.Worker)
+            print(self.compile_query(query))
 
             if cursor:
                 query = query.where(model.Worker.id > cursor)
@@ -100,9 +100,137 @@ class Repository(BaseSQLRepository, interface.Repository):
             ).limit(limit)
             if cursor:
                 query = query.where(model.Worker.id > cursor)
-            result = (await session.execute(query))
+            result = (await session.execute(query)).unique()
 
             return [worker[0].to_entity() for worker in result], max([worker[0].id for worker in result] + [0])
+
+    async def update_task_start_time(self, task_uuid: entities.TaskUUID, start_time: datetime, session=None):
+        await self.update_task(task_uuid, {
+            'start_time': start_time
+        }, session)
+
+    async def update_task_stop_time(self, task_uuid: entities.TaskUUID, stop_time: datetime, session=None):
+        await self.update_task(task_uuid, {
+            'stop_time': stop_time
+        }, session)
+
+    @staticmethod
+    def _filter_open_range(query: Query, worker_inactive2dead_second: int, range_begin: datetime) -> Query:
+        # task not stop and task's worker not dead
+        return query.where(
+            or_(
+                # task and range both not end
+                and_(
+                    model.Task.stop_time == None,
+                    model.Worker.last_heart_beat > datetime.now() + timedelta(
+                        seconds=worker_inactive2dead_second
+                    )
+                ),
+                # [ Task | ] range
+                and_(
+                    model.Task.stop_time > range_begin
+                ),
+                # | range [ Task ]
+                and_(
+                    model.Task.create_time > range_begin,
+                    model.Task.stop_time != None
+                )
+            )
+        )
+
+    @staticmethod
+    def _filter_range(query: Query, worker_inactive2dead_second: int, range_: Tuple[datetime, datetime]) -> Query:
+        begin_time, end_time = range_
+        return query.where(
+            or_(
+                # [ Task | ] range |
+                and_(
+                    model.Task.stop_time < end_time,
+                    model.Task.stop_time > begin_time,
+                ),
+                # | range [ Task | ]
+                and_(
+                    model.Task.create_time < end_time,
+                    model.Task.create_time > begin_time
+                ),
+                # [ Task | range |
+                and_(
+                    model.Task.create_time < begin_time,
+                    model.Task.stop_time == None,
+                    model.Worker.last_heart_beat > datetime.now() + timedelta(
+                        seconds=worker_inactive2dead_second
+                    )
+                )
+            )
+        )
+
+    async def get_brief_tasks_from_cursor(
+            self,
+            begin_time: datetime,
+            worker_inactive2dead_second: int,
+            end_time: datetime | None = None,
+            worker_uuid: entities.WorkerUUID | None = None,
+            include_cross_task: bool = False,
+            limit: int | None = None,
+            cursor: int | None = None,
+            session: AsyncSession | None = None
+    ) -> Tuple[List[entities.Task], int]:
+        async with self._ensure_session(session) as session:
+            session: AsyncSession
+            query = (
+                select(
+                    model.Task,
+                    model.Function.uuid
+                )
+                .join(model.Function, model.Function.id == model.Task.func_id, isouter=True)
+                .join(model.Worker, model.Worker.id == model.Task.worker_id, isouter=True)
+            )
+            query = query.options(
+                lazyload('*')
+            )
+            if worker_uuid:
+                query = query.where(model.Worker.uuid == worker_uuid)
+
+            if include_cross_task:
+                # query to current time
+                if not end_time:
+                    query = self._filter_open_range(query, worker_inactive2dead_second, begin_time)
+                # query to end_time
+                else:
+                    query = self._filter_range(query, worker_inactive2dead_second, (begin_time, end_time))
+            else:
+                query = query.where(model.Task.start_time > begin_time)
+                if end_time:
+                    query = query.where(model.Task.stop_time < end_time)
+
+            if cursor:
+                query = query.where(model.Task.id > cursor)
+
+            result = (await session.execute(query))
+            print(self.compile_query(query))
+            res = [
+                (task.id, entities.Task(
+                    uuid=task.uuid,
+                    parent_task_uuid=task.parent_task_uuid,
+                    parent_task_type=task.parent_task_type,
+                    status=task.status,
+                    worker_uuid=worker_uuid,
+                    func=func_uuid,
+                    argument=None,
+                    result_as_state=task.result_as_state,
+                    start_time=task.start_time,
+                    stop_time=task.stop_time,
+                    timeout=task.timeout,
+                    description=task.description,
+                    result=task.result,
+                    name=task.name,
+                    create_time=task.create_time
+                )) for task, func_uuid in result
+            ]
+            if not res:
+                return [], 0
+            ids, tasks = zip(*res)
+            return list(tasks), max(ids)
 
     async def match_functions_from_name(
             self,
@@ -161,10 +289,15 @@ class Repository(BaseSQLRepository, interface.Repository):
 
             session.add(model.Task(
                 uuid=task.uuid,
-                status=task.status.value,
+                status=task.status,
                 parent_task_uuid=task.parent_task_uuid,
+                parent_task_type=task.parent_task_type,
                 worker_id=(await self._get_model_from_uuid(model.Worker, task.worker_uuid, session=session)).id,
                 func_id=func_id,
+                timeout=task.timeout,
+                description=task.description,
+                result=task.result,
+                create_time=task.create_time,
                 result_as_state=task.result_as_state
             ))
 

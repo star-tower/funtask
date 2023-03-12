@@ -6,6 +6,7 @@ import re
 import time
 import uuid
 from dataclasses import asdict
+from datetime import datetime
 from typing import List, Tuple, cast, Callable
 
 import dill
@@ -19,7 +20,7 @@ import uvicorn
 
 from funtask.utils.base64_bytes import Base64Bytes
 from funtask.webserver.model import IncreaseWorkersReq, WorkersWithCursor, NewTaskReq, NewFuncReq, FuncWithCursor, \
-    NewCronTaskReq
+    NewCronTaskReq, TaskDescribesWithCursor, TaskDescribe
 from funtask.webserver.utils import self_wrapper, SelfPointer
 
 api = APIRouter(prefix='/api', tags=['api'])
@@ -139,6 +140,7 @@ class Webserver:
             await self.repository.add_task(entities.Task(
                 uuid=cast(entities.TaskUUID, task_uuid),
                 parent_task_uuid=None,
+                parent_task_type=None,
                 status=entities.TaskStatus.UNSCHEDULED,
                 worker_uuid=worker_uuid,
                 name=req.name,
@@ -146,6 +148,7 @@ class Webserver:
                 argument=None,
                 description=req.description,
                 result_as_state=False,
+                create_time=datetime.now(),
                 timeout=1000
             ))
             node: entities.SchedulerNode = random.choice(await self.scheduler_control.get_all_nodes())
@@ -206,6 +209,53 @@ class Webserver:
             enc_able_funcs.append(entities.Func(**func_dict))
         return FuncWithCursor(enc_able_funcs, cursor)
 
+    @api.get('/tasks_on_worker', response_model=TaskDescribesWithCursor)
+    @self_wrapper(webserver_pointer)
+    async def get_tasks(
+            self,
+            worker_uuid: entities.WorkerUUID,
+            begin_time: datetime,
+            worker_inactive2dead_second: int,
+            end_time: datetime | None = None,
+            limit: int | None = None,
+            cursor: int | None = None,
+            include_cross_task: bool = True
+    ):
+        """
+        get tasks on specific worker.
+        :param worker_inactive2dead_second: time interval of current to last heart beat to determine if a worker dead, dead
+        worker's running function will not show
+        :param worker_uuid: worker uuid
+        :param begin_time: query tasks start time after this time
+        :param end_time: query tasks start time before this time, begin time and end time compose a time range
+        :param limit: how many tasks will get in this query, the rest of it can be got by cursor
+        :param cursor: the cursor returned by last query
+        :param include_cross_task: if this option is true, any task cross the time range will as result
+        :return: list of task describe
+        """
+        tasks_desc, next_cursor = await self.repository.get_brief_tasks_from_cursor(
+            begin_time=begin_time,
+            end_time=end_time,
+            worker_uuid=worker_uuid,
+            include_cross_task=include_cross_task,
+            worker_inactive2dead_second=worker_inactive2dead_second,
+            limit=limit,
+            cursor=cursor
+        )
+        return TaskDescribesWithCursor(
+            task_describes=[TaskDescribe(
+                start_time=task_desc.start_time,
+                create_time=task_desc.create_time,
+                task_uuid=task_desc.uuid,
+                status=task_desc.status,
+                name=task_desc.name,
+                stop_time=task_desc.stop_time,
+                parent_task_uuid=task_desc.parent_task_uuid,
+                parent_task_type=task_desc.parent_task_type
+            ) for task_desc in tasks_desc],
+            cursor=next_cursor
+        )
+
     @api.post('/cron_task')
     @self_wrapper(webserver_pointer)
     async def create_cron_task(self, req: NewCronTaskReq):
@@ -242,41 +292,8 @@ class Webserver:
             tags=[],
             disabled=False,
             result_as_state=False,
-            timeout=-1
+            timeout=None
         ))
-
-    async def get_task_by_uuid(self, task_uuid: entities.TaskUUID) -> entities.Task | None:
-        pass
-
-    async def get_tasks(
-            self,
-            tags: List[str] | None = None,
-            func: entities.FuncUUID | None = None,
-            cursor: entities.TaskQueryCursor | None = None,
-            limit: int | None = None
-    ) -> Tuple[List[entities.Task], entities.TaskQueryCursor]:
-        pass
-
-    async def get_funcs(self, tags: List[str] | None = None, include_tmp: bool = False) -> List[entities.Func]:
-        pass
-
-    async def trigger_func_group(self, func_group: entities.FuncGroup,
-                                 argument_group: entities.FuncArgumentGroup) -> entities.TaskGroupUUID:
-        pass
-
-    async def add_func_group(self, func_group: entities.FuncGroup) -> entities.FuncGroupUUID:
-        pass
-
-    async def trigger_repeated_func(self, time_points: entities.TimePoint, func: entities.Func,
-                                    argument: entities.FuncArgument) -> entities.CronTaskUUID:
-        pass
-
-    async def trigger_repeated_func_group(self, time_points: entities.TimePoint, func_group: entities.FuncGroup,
-                                          argument_group: entities.FuncArgumentGroup) -> entities.CronTaskUUID:
-        pass
-
-    async def add_parameter_schema(self, parameter_schema: entities.ParameterSchema) -> entities.ParameterSchemaUUID:
-        pass
 
     def run(self):
         webserver_pointer.set_self(self)

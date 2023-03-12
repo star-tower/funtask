@@ -20,7 +20,7 @@ class KillException(Exception):
 
 @contextmanager
 def killable(timeout: int = None, mute: bool = True):
-    assert timeout is None or timeout > 0, Exception("timeout should > 0")
+    assert timeout is None or timeout > 0, Exception(f"timeout should > 0, current: {timeout}")
     sig_ref = Ref(False)
 
     def kill():

@@ -50,6 +50,18 @@ class WorkerScheduler(interface.WorkerScheduler):
         self.argument_queue_factory = argument_queue_factory
         self.lock = lock
 
+    async def update_time(
+            self,
+            task: entities.Task,
+            new_task_status: entities.TaskStatus,
+            time: datetime,
+            session=None
+    ):
+        if new_task_status == entities.TaskStatus.RUNNING and task.start_time is None:
+            await self.repository.update_task_start_time(task.uuid, start_time=time, session=session)
+        elif new_task_status != entities.TaskStatus.RUNNING:
+            await self.repository.update_task_stop_time(task.uuid, stop_time=time, session=session)
+
     async def process_new_status(self, status_report: StatusReport):
         if isinstance(status_report.status, entities.TaskStatus):
             assert status_report.task_uuid is not None, ValueError(
@@ -59,6 +71,11 @@ class WorkerScheduler(interface.WorkerScheduler):
                 status_report.task_uuid
             )
 
+            await self.update_time(
+                task,
+                status_report.status,
+                datetime.fromtimestamp(status_report.create_timestamp)
+            )
             # validate status change
             if task.status in (
                     entities.TaskStatus.SKIP, entities.TaskStatus.ERROR, entities.TaskStatus.SUCCESS,
@@ -69,10 +86,12 @@ class WorkerScheduler(interface.WorkerScheduler):
                     raise interface.StatusChangeException(
                         f"can't change status from {task.status} to {status_report.status}"
                     )
-            await self.repository.change_task_status_from_uuid(
-                task_uuid=task.uuid,
-                status=status_report.status
-            )
+            async with self.repository.session_ctx() as session:
+                await self.repository.change_task_status_from_uuid(
+                    task_uuid=task.uuid,
+                    status=status_report.status,
+                    session=session
+                )
         elif status_report.status is None:
             assert status_report.worker_uuid is not None, ValueError(
                 "worker uuid should not be none, when status type is WorkerStatus, please report this bug"
@@ -209,11 +228,13 @@ class WorkerScheduler(interface.WorkerScheduler):
             cron_task: entities.CronTask,
             worker_choose_strategy: entities.WorkerStrategy
     ) -> entities.WorkerUUID | None:
+        # TODO: bug here
         new_task_uuid = cast(entities.TaskUUID, str(uuid.uuid4()))
         match worker_choose_strategy.strategy:
             case entities.WorkerChooseStrategy.STATIC:
                 assert worker_choose_strategy.static_worker is not None, ValueError(
-                    "static worker must not None")
+                    "static worker must not None"
+                )
                 if isinstance(worker_choose_strategy.static_worker, str):
                     return worker_choose_strategy.static_worker
                 return worker_choose_strategy.static_worker.uuid
@@ -229,8 +250,10 @@ class WorkerScheduler(interface.WorkerScheduler):
                     await self.repository.add_task(entities.Task(
                         uuid=new_task_uuid,
                         parent_task_uuid=cron_task.uuid,
+                        parent_task_type=entities.TaskType.CronTask,
                         status=entities.TaskStatus.SKIP,
                         worker_uuid=None,
+                        create_time=datetime.now(),
                         func=cron_task.func,
                         argument=None,
                         result_as_state=cron_task.result_as_state,
@@ -253,6 +276,7 @@ class WorkerScheduler(interface.WorkerScheduler):
                 await self.repository.add_task(entities.Task(
                     uuid=new_task_uuid,
                     parent_task_uuid=cron_task.uuid,
+                    parent_task_type=entities.TaskType.CronTask,
                     status=entities.TaskStatus.SKIP,
                     worker_uuid=await self._choose_worker_from_worker_choose_strategy(
                         cron_task,
@@ -262,12 +286,14 @@ class WorkerScheduler(interface.WorkerScheduler):
                     argument=None,
                     result_as_state=cron_task.result_as_state,
                     timeout=cron_task.timeout,
+                    start_time=datetime.now(),
                     description=cron_task.description
                 ))
             case entities.ArgumentGenerateStrategy.STATIC:
                 await self.repository.add_task(entities.Task(
                     uuid=new_task_uuid,
                     parent_task_uuid=cron_task.uuid,
+                    parent_task_type=entities.TaskType.CRON_TASK,
                     status=entities.TaskStatus.SCHEDULED,
                     worker_uuid=await self._choose_worker_from_worker_choose_strategy(
                         cron_task,
@@ -275,6 +301,7 @@ class WorkerScheduler(interface.WorkerScheduler):
                     ),
                     func=cron_task.func,
                     argument=cron_task.argument_generate_strategy.static_argument,
+                    create_time=datetime.now(),
                     result_as_state=cron_task.result_as_state,
                     timeout=cron_task.timeout,
                     description=cron_task.description
@@ -295,6 +322,7 @@ class WorkerScheduler(interface.WorkerScheduler):
                     await self.repository.add_task(entities.Task(
                         uuid=new_task_uuid,
                         parent_task_uuid=cron_task.uuid,
+                        parent_task_type=entities.TaskType.CronTask,
                         status=entities.TaskStatus.SCHEDULED,
                         worker_uuid=await self._choose_worker_from_worker_choose_strategy(
                             cron_task,
@@ -303,6 +331,7 @@ class WorkerScheduler(interface.WorkerScheduler):
                         func=cron_task.func,
                         argument=argument,
                         result_as_state=cron_task.result_as_state,
+                        create_time=datetime.now(),
                         timeout=cron_task.timeout,
                         description=cron_task.description
                     ))
@@ -315,8 +344,10 @@ class WorkerScheduler(interface.WorkerScheduler):
                             await self.repository.add_task(entities.Task(
                                 uuid=new_task_uuid,
                                 parent_task_uuid=cron_task.uuid,
+                                parent_task_type=entities.TaskType.CronTask,
                                 status=entities.TaskStatus.SKIP,
                                 worker_uuid=None,
+                                start_time=datetime.now(),
                                 func=cron_task.func,
                                 argument=None,
                                 result_as_state=cron_task.result_as_state,
@@ -330,9 +361,11 @@ class WorkerScheduler(interface.WorkerScheduler):
                                 await self.repository.add_task(entities.Task(
                                     uuid=new_task_uuid,
                                     parent_task_uuid=cron_task.uuid,
+                                    parent_task_type=entities.TaskType.CronTask,
                                     status=entities.TaskStatus.ERROR,
                                     worker_uuid=None,
                                     func=cron_task.func,
+                                    create_time=datetime.now(),
                                     argument=None,
                                     result_as_state=cron_task.result_as_state,
                                     timeout=cron_task.timeout,
@@ -343,11 +376,13 @@ class WorkerScheduler(interface.WorkerScheduler):
                             await self.repository.add_task(entities.Task(
                                 uuid=new_task_uuid,
                                 parent_task_uuid=cron_task.uuid,
+                                parent_task_type=entities.TaskType.CronTask,
                                 status=entities.TaskStatus.SCHEDULED,
                                 worker_uuid=None,
                                 func=cron_task.func,
                                 argument=argument,
                                 result_as_state=cron_task.result_as_state,
+                                create_time=datetime.now(),
                                 timeout=cron_task.timeout,
                                 description=cron_task.description
                             ))

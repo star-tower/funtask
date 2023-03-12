@@ -2,8 +2,11 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator, Type, List, Any, TypeVar
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.dialects import mysql
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, Query
+from sqlalchemy.sql import Select
+
 from funtask.core import interface_and_types as interface
 
 from funtask.providers.db.sql.model import EntityConvertable
@@ -15,13 +18,17 @@ class BaseSQLRepository:
     def __init__(
             self,
             uri: str,
-            *args,
             **kwargs
     ):
-        self.engine: AsyncEngine = create_async_engine(uri, *args, **kwargs)
+        self.engine = create_async_engine(uri, **kwargs)
         self.session = sessionmaker(
-            self.engine, class_=AsyncSession
+            self.engine,
+            class_=AsyncSession
         )
+
+    @staticmethod
+    def compile_query(query: Select | Query, dialect=mysql.dialect) -> str:
+        return str(query.compile(dialect=dialect(), compile_kwargs={"literal_binds": True}))
 
     @asynccontextmanager
     async def session_ctx(self):
@@ -110,4 +117,3 @@ class BaseSQLRepository:
             if not result:
                 raise interface.RecordNotFoundException(f'record uuid: {uuid} of type: {t} not found')
             return result[0]
-

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import Field
 
 from funtask.core import entities
@@ -49,4 +51,22 @@ class NewFuncReq:
 @dataclass
 class FuncWithCursor:
     funcs: List[entities.Func]
+    cursor: int
+
+
+@dataclass
+class TaskDescribe:
+    start_time: datetime | None
+    create_time: datetime
+    task_uuid: entities.TaskUUID
+    status: entities.TaskStatus
+    name: str | None = Field(nullable=True)
+    stop_time: datetime | None = Field(nullable=True)
+    parent_task_uuid: entities.CronTaskUUID | entities.TaskUUID | None = Field(nullable=True)
+    parent_task_type: entities.TaskType | None = Field(nullable=True)
+
+
+@dataclass
+class TaskDescribesWithCursor:
+    task_describes: List[TaskDescribe]
     cursor: int

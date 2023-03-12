@@ -40,18 +40,28 @@ class SchedulerNode:
     port: int
 
 
+@unique
+class TaskType(AutoName):
+    TASK = auto()
+    CRON_TASK = auto()
+
+
 @dataclass
 class Task:
     uuid: TaskUUID
     parent_task_uuid: TaskUUID | CronTaskUUID | None
+    parent_task_type: TaskType | None
     status: 'TaskStatus'
     worker_uuid: WorkerUUID | None
     func: 'Union[Func, FuncUUID]'
     argument: 'Optional[FuncArgument]'
     result_as_state: bool
+    create_time: datetime
+    start_time: datetime | None = None
+    stop_time: datetime | None = None
     timeout: float | None = None
     description: str | None = None
-    result: Any = None
+    result: Any | None = None
     name: str | None = None
 
 
@@ -109,9 +119,9 @@ class CronTask:
     worker_choose_strategy: WorkerStrategy
     task_queue_strategy: 'QueueStrategy'
     result_as_state: bool
-    timeout: float
     disabled: bool
     name: str
+    timeout: float | None = None
     description: str | None = None
     tags: List['Tag'] = field(default_factory=list)
 
@@ -207,7 +217,6 @@ class WorkerStatus(AutoName):
     RUNNING = auto()
     STOPPING = auto()
     STOPPED = auto()
-    DIED = auto()
 
 
 @dataclass
